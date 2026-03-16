@@ -1,0 +1,11 @@
+{
+  "orgName": "routIQ Dev",
+  "edition": "Developer",
+  "namespace": "ure",
+  "features": ["EnableSetPasswordInApi"],
+  "settings": {
+    "orgPreferenceSettings": {
+      "s1DesktopEnabled": true
+    }
+  }
+}
