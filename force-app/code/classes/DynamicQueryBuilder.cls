@@ -21,6 +21,8 @@
  */
 public with sharing class DynamicQueryBuilder {
 
+    private static final String CLS = 'DynamicQueryBuilder';
+
     // ─── Public API ────────────────────────────────────────────────────────────
 
     /**
@@ -66,6 +68,17 @@ public with sharing class DynamicQueryBuilder {
         }
 
         soql += ' LIMIT ' + limitValue;
+
+        URE_Logger.debug('SOQL assembled | object=' + fromClause
+                + ' | whereClauses=' + bundle.conditions.size()
+                + ' | orderByClauses=' + (bundle.priorities != null ? bundle.priorities.size() : 0)
+                + ' | limit=' + limitValue
+                + ' | bindKeys=' + binds.size())
+            .category(URE_Logger.Category.QUERY_BUILD)
+            .inClass(CLS).inMethod('build')
+            .forConfig(bundle.developerName)
+            .forObject(bundle.objectApiName)
+            .log();
 
         return new QuerySpec(soql, binds, bundle.objectApiName);
     }
@@ -119,7 +132,6 @@ public with sharing class DynamicQueryBuilder {
     ) {
         List<String> clauses = new List<String>();
 
-        // Condition-based clauses (b0, b1, b2…)
         for (Integer i = 0; i < bundle.conditions.size(); i++) {
             Routing_Condition__mdt cond = bundle.conditions[i];
             String bindKey = 'b' + i;
@@ -187,7 +199,11 @@ public with sharing class DynamicQueryBuilder {
                 return field + ' >= :' + bindKey;
             }
             when else {
-                // Defensive default — treat unknown operators as IN
+                URE_Logger.warn('Unknown operator "' + op + '" on field ' + field
+                        + ' — defaulting to IN')
+                    .category(URE_Logger.Category.QUERY_BUILD)
+                    .inClass(CLS).inMethod('buildConditionClause')
+                    .log();
                 return field + ' IN :' + bindKey;
             }
         }

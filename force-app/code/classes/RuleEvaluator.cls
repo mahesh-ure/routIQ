@@ -21,7 +21,7 @@
  */
 public with sharing class RuleEvaluator {
 
-    // ─── Inner Value Object ───────────────────────────────────────────────────
+    private static final String CLS = 'RuleEvaluator';
 
     /**
      * @description Result of evaluating all configs against a request.
@@ -76,9 +76,12 @@ public with sharing class RuleEvaluator {
             return result;
         }
 
+        Integer skippedNotApplicable = 0;
+
         for (ConfigBundle bundle : bundles) {
             // ─── Applicability check ──────────────────────────────────────
             if (!isApplicable(bundle, request)) {
+                skippedNotApplicable++;
                 continue;
             }
 
@@ -88,17 +91,28 @@ public with sharing class RuleEvaluator {
                 String warning = 'Config "' + bundle.developerName
                     + '" skipped: ' + String.join(errors, '; ');
                 result.validationWarnings.add(warning);
-                System.debug(LoggingLevel.WARN,
-                    'RuleEvaluator: ' + warning);
+                URE_Logger.warn(warning)
+                    .category(URE_Logger.Category.VALIDATION)
+                    .inClass(CLS).inMethod('evaluate')
+                    .forConfig(bundle.developerName)
+                    .forObject(bundle.objectApiName)
+                    .log();
                 continue;
             }
 
             // ─── Bundle is applicable and valid ───────────────────────────
             result.applicableBundles.add(bundle);
-
-            // Collect USER_ATTRIBUTE fields from this bundle's conditions
             collectUserFields(bundle.conditions, result.requiredUserFields);
         }
+
+        URE_Logger.debug('Rule evaluation complete | evaluated=' + bundles.size()
+                + ' | applicable=' + result.applicableBundles.size()
+                + ' | skippedNotApplicable=' + skippedNotApplicable
+                + ' | validationWarnings=' + result.validationWarnings.size()
+                + ' | userFields=' + result.requiredUserFields.size())
+            .category(URE_Logger.Category.CONDITION_BIND)
+            .inClass(CLS).inMethod('evaluate')
+            .log();
 
         return result;
     }
@@ -172,41 +186,30 @@ public with sharing class RuleEvaluator {
                 Routing_Condition__mdt cond = bundle.conditions[i];
 
                 if (String.isBlank(cond.Field_API_Name__c)) {
-                    errors.add('Condition #' + (i + 1)
-                        + ': Field_API_Name__c is required.');
+                    errors.add('Condition #' + (i + 1) + ': Field_API_Name__c is required.');
                 }
-
                 if (String.isBlank(cond.Operator__c)) {
-                    errors.add('Condition #' + (i + 1)
-                        + ': Operator__c is required.');
+                    errors.add('Condition #' + (i + 1) + ': Operator__c is required.');
                 }
-
-                // USER_ATTRIBUTE conditions must specify the User field
                 if (cond.Value_Source__c == 'USER_ATTRIBUTE'
                     && String.isBlank(cond.User_Attribute_Field__c)
                 ) {
                     errors.add('Condition #' + (i + 1)
                         + ': User_Attribute_Field__c is required for USER_ATTRIBUTE source.');
                 }
-
-                // STATIC conditions must have Values__c
                 if (cond.Value_Source__c == 'STATIC'
                     && String.isBlank(cond.Values__c)
                 ) {
-                    errors.add('Condition #' + (i + 1)
-                        + ': Values__c is required for STATIC source.');
+                    errors.add('Condition #' + (i + 1) + ': Values__c is required for STATIC source.');
                 }
             }
         }
 
-        // Validate priority integrity
         if (bundle.priorities != null) {
             for (Integer i = 0; i < bundle.priorities.size(); i++) {
                 Routing_Priority__mdt pri = bundle.priorities[i];
-
                 if (String.isBlank(pri.Sort_Field_API_Name__c)) {
-                    errors.add('Priority #' + (i + 1)
-                        + ': Sort_Field_API_Name__c is required.');
+                    errors.add('Priority #' + (i + 1) + ': Sort_Field_API_Name__c is required.');
                 }
             }
         }
@@ -216,14 +219,6 @@ public with sharing class RuleEvaluator {
 
     // ─── User Field Collection ────────────────────────────────────────────────
 
-    /**
-     * @description Extracts User_Attribute_Field__c values from USER_ATTRIBUTE
-     *              conditions and adds them to the accumulator set.
-     *
-     *              Called per-bundle during evaluate(). The accumulated set is used
-     *              for a single UserAttributeSelector.getAttributes() call — avoiding
-     *              N SOQL queries for N bundles.
-     */
     private static void collectUserFields(
         List<Routing_Condition__mdt> conditions,
         Set<String> accumulator
@@ -231,7 +226,6 @@ public with sharing class RuleEvaluator {
         if (conditions == null) {
             return;
         }
-
         for (Routing_Condition__mdt cond : conditions) {
             if (cond.Value_Source__c == 'USER_ATTRIBUTE'
                 && String.isNotBlank(cond.User_Attribute_Field__c)

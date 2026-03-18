@@ -11,6 +11,8 @@
  */
 public with sharing class CandidateSelector {
 
+    private static final String CLS = 'CandidateSelector';
+
     @TestVisible
     private static List<SObject> mockResults;
 
@@ -23,10 +25,29 @@ public with sharing class CandidateSelector {
         if (Test.isRunningTest() && mockResults != null) {
             return mockResults;
         }
-        return Database.queryWithBinds(
+
+        List<SObject> results = Database.queryWithBinds(
             spec.soql,
             spec.bindMap,
             AccessLevel.USER_MODE
         );
+
+        URE_Logger.info('Candidate query executed | object=' + spec.objectApiName
+                + ' | returned=' + results.size())
+            .category(URE_Logger.Category.CANDIDATE)
+            .inClass(CLS).inMethod('query')
+            .forObject(spec.objectApiName)
+            .withLimits()
+            .log();
+
+        if (results.isEmpty()) {
+            URE_Logger.debug('Zero candidates returned for ' + spec.objectApiName)
+                .category(URE_Logger.Category.CANDIDATE)
+                .inClass(CLS).inMethod('query')
+                .forObject(spec.objectApiName)
+                .log();
+        }
+
+        return results;
     }
 }

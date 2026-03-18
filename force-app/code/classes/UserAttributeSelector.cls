@@ -11,6 +11,8 @@
  */
 public with sharing class UserAttributeSelector {
 
+    private static final String CLS = 'UserAttributeSelector';
+
     @TestVisible
     private static Map<String, Object> mockAttributes;
 
@@ -63,6 +65,10 @@ public with sharing class UserAttributeSelector {
         );
 
         if (results.isEmpty()) {
+            URE_Logger.warn('User not found for Id=' + userId)
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('getAttributes')
+                .log();
             return new Map<String, Object>();
         }
 
@@ -72,6 +78,15 @@ public with sharing class UserAttributeSelector {
         for (String field : fieldApiNames) {
             attributes.put(field, userRecord.get(field));
         }
+
+        URE_Logger.debug('User attributes fetched | userId=' + userId
+                + ' | fieldsRequested=' + fieldApiNames.size()
+                + ' | fieldsReturned=' + attributes.size())
+            .category(URE_Logger.Category.CONDITION_BIND)
+            .inClass(CLS).inMethod('getAttributes')
+            .withLimits()
+            .log();
+
         return attributes;
     }
 

@@ -107,9 +107,13 @@ global with sharing class RoutingService {
                 body, RoutingRequest.class
             );
         } catch (Exception ex) {
-            System.debug(LoggingLevel.ERROR,
-                'RoutingService.routeRecord: malformed JSON body: '
-                + ex.getMessage());
+            URE_Logger.init('REST', UserInfo.getUserId());
+            URE_Logger.error('Malformed REST JSON body')
+                .category(URE_Logger.Category.VALIDATION)
+                .inClass('RoutingService').inMethod('routeRecord')
+                .withException(ex)
+                .log();
+            URE_Logger.flush('Failure');
             RestContext.response.statusCode = 400;
             return RoutingResult.failure(
                 null,
@@ -180,9 +184,23 @@ global with sharing class RoutingService {
         RoutingRequest request,
         String entryPoint
     ) {
-        try {
-            Id agentUserId = UserInfo.getUserId();
+        Id agentUserId = UserInfo.getUserId();
 
+        // ── Logger lifecycle: INIT ──────────────────────────────────────
+        URE_Logger.init(entryPoint, agentUserId);
+
+        URE_Logger.info('Routing request received'
+                + ' | object=' + request.objectApiName
+                + ' | recordId=' + request.recordId
+                + ' | config=' + request.configDeveloperName)
+            .category(URE_Logger.Category.ENGINE)
+            .inClass('RoutingService').inMethod('executeSingle')
+            .forConfig(request.configDeveloperName)
+            .forObject(request.objectApiName)
+            .log();
+
+        String flushStatus = 'Success';
+        try {
             RoutingResult result = RoutingEngine.execute(
                 request, agentUserId, entryPoint
             );
@@ -192,16 +210,18 @@ global with sharing class RoutingService {
                 result.entryPoint = entryPoint;
             }
 
+            flushStatus = result.success ? 'Success' : 'No_Match';
             return result;
 
         } catch (Exception ex) {
-            // Last-resort safety net — should never reach here because
-            // RoutingEngine handles exceptions internally, but defense-in-depth
-            // ensures callers always get a structured response.
-            System.debug(LoggingLevel.ERROR,
-                'RoutingService: unhandled exception in ' + entryPoint
-                + ': ' + ex.getMessage()
-                + '\n' + ex.getStackTraceString());
+            // Last-resort safety net — defense-in-depth
+            URE_Logger.fatal('Unhandled exception escaped RoutingEngine')
+                .category(URE_Logger.Category.ENGINE)
+                .inClass('RoutingService').inMethod('executeSingle')
+                .withException(ex)
+                .log();
+
+            flushStatus = 'Failure';
 
             RoutingResult failResult = RoutingResult.failure(
                 (request != null) ? request.recordId : null,
@@ -209,6 +229,9 @@ global with sharing class RoutingService {
             );
             failResult.entryPoint = entryPoint;
             return failResult;
+        } finally {
+            // ── Logger lifecycle: FLUSH (ALWAYS runs, after all business DML) ──
+            URE_Logger.flush(flushStatus);
         }
     }
 }

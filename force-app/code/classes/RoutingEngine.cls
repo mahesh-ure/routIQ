@@ -25,6 +25,8 @@
  */
 public with sharing class RoutingEngine {
 
+    private static final String CLS = 'RoutingEngine';
+
     // ─── Public API ───────────────────────────────────────────────────────────
 
     /**
@@ -43,33 +45,72 @@ public with sharing class RoutingEngine {
         // ─── Phase 1: Validate Request ────────────────────────────────────
         List<String> validationErrors = request.validate();
         if (!validationErrors.isEmpty()) {
+            URE_Logger.warn('Request validation failed: '
+                    + String.join(validationErrors, '; '))
+                .category(URE_Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('execute')
+                .log();
             return RoutingResult.failure(
                 request.recordId,
                 'Validation failed: ' + String.join(validationErrors, '; ')
             );
         }
 
+        // ── PERF snapshot: after validation ─────────────────────────────
+        URE_Logger.perf('Phase 1 complete: request validated')
+            .category(URE_Logger.Category.PERFORMANCE)
+            .inClass(CLS).inMethod('execute')
+            .log();
+
         // ─── Phase 2: Load All Active Configs (0 SOQL) ───────────────────
         List<ConfigBundle> allBundles = ConfigLoader.loadActive();
         if (allBundles.isEmpty()) {
+            URE_Logger.warn('No active routing configurations found')
+                .category(URE_Logger.Category.CONFIG)
+                .inClass(CLS).inMethod('execute')
+                .log();
             return RoutingResult.failure(
                 request.recordId,
                 'No active routing configurations found.'
             );
         }
 
+        // ── PERF snapshot: after config load ────────────────────────────
+        URE_Logger.perf('Phase 2 complete: ' + allBundles.size() + ' configs loaded')
+            .category(URE_Logger.Category.PERFORMANCE)
+            .inClass(CLS).inMethod('execute')
+            .log();
+
         // ─── Phase 3: Evaluate Applicable Configs (0 SOQL) ───────────────
         RuleEvaluator.EvaluationResult evalResult =
             RuleEvaluator.evaluate(allBundles, request);
 
         if (evalResult.applicableBundles.isEmpty()) {
-            // Log validation warnings for diagnostics
             for (String warning : evalResult.validationWarnings) {
-                System.debug(LoggingLevel.WARN,
-                    'RoutingEngine: ' + warning);
+                URE_Logger.warn(warning)
+                    .category(URE_Logger.Category.VALIDATION)
+                    .inClass(CLS).inMethod('execute')
+                    .log();
             }
+            URE_Logger.info('No applicable configs after evaluation')
+                .category(URE_Logger.Category.CONFIG)
+                .inClass(CLS).inMethod('execute')
+                .log();
             return RoutingResult.noMatch();
         }
+
+        URE_Logger.info('Applicable configs: ' + evalResult.applicableBundles.size()
+                + ' | userFields: ' + evalResult.requiredUserFields.size())
+            .category(URE_Logger.Category.CONFIG)
+            .inClass(CLS).inMethod('execute')
+            .log();
+
+        // ── PERF snapshot: after rule evaluation ────────────────────────
+        URE_Logger.perf('Phase 3 complete: ' + evalResult.applicableBundles.size()
+                + ' applicable bundles')
+            .category(URE_Logger.Category.PERFORMANCE)
+            .inClass(CLS).inMethod('execute')
+            .log();
 
         // ─── Phase 4: Pre-fetch User Attributes (0–1 SOQL) ───────────────
         Map<String, Object> userAttributes = new Map<String, Object>();
@@ -80,6 +121,13 @@ public with sharing class RoutingEngine {
             );
         }
 
+        // ── PERF snapshot: after user attribute query ───────────────────
+        URE_Logger.perf('Phase 4 complete: user attributes fetched'
+                + ' | fieldCount=' + userAttributes.size())
+            .category(URE_Logger.Category.PERFORMANCE)
+            .inClass(CLS).inMethod('execute')
+            .log();
+
         // ─── Phase 5: Process Each Applicable Bundle ──────────────────────
         List<AuditLogger.AuditEntry> auditEntries =
             new List<AuditLogger.AuditEntry>();
@@ -89,6 +137,16 @@ public with sharing class RoutingEngine {
         try {
             for (Integer i = 0; i < evalResult.applicableBundles.size(); i++) {
                 ConfigBundle bundle = evalResult.applicableBundles[i];
+
+                URE_Logger.info('Processing bundle ' + (i + 1)
+                        + '/' + evalResult.applicableBundles.size()
+                        + ': "' + bundle.developerName + '"'
+                        + ' | object=' + bundle.objectApiName)
+                    .category(URE_Logger.Category.ENGINE)
+                    .inClass(CLS).inMethod('execute')
+                    .forConfig(bundle.developerName)
+                    .forObject(bundle.objectApiName)
+                    .log();
 
                 ProcessOutcome processed = processBundle(
                     bundle, request, agentUserId, entryPoint, userAttributes
@@ -101,10 +159,29 @@ public with sharing class RoutingEngine {
                     finalResult = buildSuccessResult(
                         processed.outcome, agentUserId, entryPoint
                     );
+
+                    URE_Logger.info('Assignment succeeded for "'
+                            + bundle.developerName + '"'
+                            + ' | recordId=' + processed.outcome.recordId
+                            + ' | retries=' + processed.outcome.retryCount)
+                        .category(URE_Logger.Category.ASSIGNMENT)
+                        .inClass(CLS).inMethod('execute')
+                        .forConfig(bundle.developerName)
+                        .forObject(bundle.objectApiName)
+                        .forRecord(processed.outcome.recordId)
+                        .log();
+
                     break; // First successful assignment wins (pull model)
                 }
             }
         } finally {
+            // ── PERF snapshot: before audit flush ───────────────────────
+            URE_Logger.perf('Phase 5 complete: bundle processing done'
+                    + ' | auditEntries=' + auditEntries.size())
+                .category(URE_Logger.Category.PERFORMANCE)
+                .inClass(CLS).inMethod('execute')
+                .log();
+
             // ─── Phase 6: Flush Audit Entries (1 DML) — ALWAYS runs ───────
             List<Id> logIds = AuditLogger.flush(auditEntries);
 
@@ -118,6 +195,13 @@ public with sharing class RoutingEngine {
                     ? String.valueOf(logIds[successIndex])
                     : null;
             }
+
+            // ── PERF snapshot: after audit flush ────────────────────────
+            URE_Logger.perf('Phase 6 complete: audit flushed'
+                    + ' | logIds=' + logIds.size())
+                .category(URE_Logger.Category.PERFORMANCE)
+                .inClass(CLS).inMethod('execute')
+                .log();
         }
 
         // ─── Phase 7: Return Result ──────────────────────────────────────
@@ -126,15 +210,15 @@ public with sharing class RoutingEngine {
         }
 
         // No bundle produced a successful assignment
+        URE_Logger.info('No bundle produced a successful assignment')
+            .category(URE_Logger.Category.ENGINE)
+            .inClass(CLS).inMethod('execute')
+            .log();
         return RoutingResult.noMatch();
     }
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
-    /**
-     * @description Pairs an AssignmentOutcome with its AuditEntry for a single bundle.
-     *              Keeps the engine loop clean — one method call per bundle, one return type.
-     */
     private class ProcessOutcome {
         AssignmentResolver.AssignmentOutcome outcome;
         AuditLogger.AuditEntry auditEntry;
@@ -191,10 +275,13 @@ public with sharing class RoutingEngine {
 
         } catch (Exception ex) {
             // ── Per-bundle failure — log and continue ─────────────────────
-            System.debug(LoggingLevel.ERROR,
-                'RoutingEngine: exception processing config "'
-                + bundle.developerName + '": ' + ex.getMessage()
-                + '\n' + ex.getStackTraceString());
+            URE_Logger.error('Exception processing config "' + bundle.developerName + '"')
+                .category(URE_Logger.Category.ENGINE)
+                .inClass(CLS).inMethod('processBundle')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .withException(ex)
+                .log();
 
             result.outcome = buildExceptionOutcome(ex);
             result.auditEntry = AuditLogger.createEntry(

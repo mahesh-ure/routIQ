@@ -2,23 +2,13 @@
  * @description Orchestrates the record assignment phase of routing: locks a candidate
  *              record, updates its owner field, and returns the outcome.
  *
- *              Flow (per ConfigBundle):
- *              1. Check Allow_Multiple__c — if false and agent already owns a record
- *                 for this object/owner-field combination, skip assignment.
- *              2. Lock first available candidate via RetryLockHandler.lockFirstAvailable().
- *              3. Update the owner field on the locked record.
- *              4. Return a structured AssignmentOutcome for downstream logging and
- *                 RoutingResult construction.
- *
  *              Security:
  *              • DML uses AccessLevel.USER_MODE — respects CRUD/FLS.
  *              • All SOQL is delegated to AssignmentSelector (bind-variable only, USER_MODE).
- *              • Owner field name originates from CMDT (admin-controlled).
  *
  *              Governor awareness:
  *              • 1 DML (update) on success. 0 DML on failure / no-match / contention.
  *              • SOQL cost is bounded by RetryLockHandler (MAX_RETRIES × candidates tried).
- *              • No DML in loops — single record update per assignment.
  *
  * @group Worker
  */
@@ -172,6 +162,13 @@ public with sharing class AssignmentResolver {
     ) {
         // ─── Guard: no candidates ─────────────────────────────────────────
         if (candidates == null || candidates.isEmpty()) {
+            URE_Logger.info('No candidates for assignment'
+                    + ' | config=' + bundle.developerName)
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('resolve')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .log();
             return outcomeNoMatch(0);
         }
 
@@ -185,6 +182,14 @@ public with sharing class AssignmentResolver {
                 agentUserId
             );
             if (!existing.isEmpty()) {
+                URE_Logger.info('Agent already assigned (Allow_Multiple=false)'
+                        + ' | config=' + bundle.developerName
+                        + ' | agent=' + agentUserId)
+                    .category(URE_Logger.Category.ASSIGNMENT)
+                    .inClass(CLS).inMethod('resolve')
+                    .forConfig(bundle.developerName)
+                    .forObject(bundle.objectApiName)
+                    .log();
                 return outcomeAlreadyAssigned();
             }
         }
@@ -197,6 +202,15 @@ public with sharing class AssignmentResolver {
         );
 
         if (!lockOutcome.success) {
+            URE_Logger.error('Lock exhausted for all candidates'
+                    + ' | config=' + bundle.developerName
+                    + ' | candidateCount=' + candidateCount
+                    + ' | totalRetries=' + lockOutcome.retryCount)
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('resolve')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .log();
             return outcomeLockExhausted(
                 lockOutcome.retryCount,
                 candidateCount
@@ -211,15 +225,20 @@ public with sharing class AssignmentResolver {
 
             Database.SaveResult sr = Database.update(
                 lockedRecord,
-                false,              // allOrNone = false — capture errors gracefully
+                false,
                 AccessLevel.USER_MODE
             );
 
             if (!sr.isSuccess()) {
                 String dmlErrors = formatDmlErrors(sr.getErrors());
-                System.debug(LoggingLevel.ERROR,
-                    'AssignmentResolver: DML failed for ' + bundle.objectApiName
-                    + ' Id=' + lockedRecord.Id + ': ' + dmlErrors);
+                URE_Logger.error('Assignment DML failed | object=' + bundle.objectApiName
+                        + ' | Id=' + lockedRecord.Id + ' | errors=' + dmlErrors)
+                    .category(URE_Logger.Category.ASSIGNMENT)
+                    .inClass(CLS).inMethod('resolve')
+                    .forConfig(bundle.developerName)
+                    .forObject(bundle.objectApiName)
+                    .forRecord(lockedRecord.Id)
+                    .log();
                 return outcomeDmlFailure(
                     lockedRecord.Id,
                     dmlErrors,
@@ -228,6 +247,18 @@ public with sharing class AssignmentResolver {
                 );
             }
 
+            URE_Logger.info('Assignment succeeded | object=' + bundle.objectApiName
+                    + ' | recordId=' + lockedRecord.Id
+                    + ' | agent=' + agentUserId
+                    + ' | retries=' + lockOutcome.retryCount)
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('resolve')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .forRecord(lockedRecord.Id)
+                .withLimits()
+                .log();
+
             return outcomeAssigned(
                 lockedRecord.Id,
                 lockOutcome.retryCount,
@@ -235,10 +266,15 @@ public with sharing class AssignmentResolver {
             );
 
         } catch (DmlException dmlEx) {
-            // Catch unexpected DmlException (e.g. trigger validation rule)
-            System.debug(LoggingLevel.ERROR,
-                'AssignmentResolver: DmlException for ' + bundle.objectApiName
-                + ' Id=' + lockedRecord.Id + ': ' + dmlEx.getMessage());
+            URE_Logger.error('DmlException during assignment | object=' + bundle.objectApiName
+                    + ' | Id=' + lockedRecord.Id)
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('resolve')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .forRecord(lockedRecord.Id)
+                .withException(dmlEx)
+                .log();
             return outcomeDmlFailure(
                 lockedRecord.Id,
                 dmlEx.getMessage(),
@@ -258,7 +294,6 @@ public with sharing class AssignmentResolver {
         if (errors == null || errors.isEmpty()) {
             return 'Unknown DML error.';
         }
-
         List<String> messages = new List<String>();
         for (Database.Error err : errors) {
             messages.add(err.getStatusCode() + ': ' + err.getMessage());

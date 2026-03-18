@@ -25,6 +25,8 @@
  */
 public with sharing class RetryLockHandler {
 
+    private static final String CLS = 'RetryLockHandler';
+
     @TestVisible
     private static final Integer MAX_RETRIES = 5;
 
@@ -117,24 +119,50 @@ public with sharing class RetryLockHandler {
                 );
 
                 if (locked == null) {
-                    // Record deleted or not visible — no point retrying
+                    URE_Logger.warn('Record vanished before lock | object='
+                            + objectApiName + ' | Id=' + recordId
+                            + ' | attempt=' + attempts)
+                        .category(URE_Logger.Category.LOCK)
+                        .inClass(CLS).inMethod('attemptLock')
+                        .forObject(objectApiName)
+                        .forRecord(recordId)
+                        .log();
                     return outcomeRecordGone(attempts);
+                }
+
+                if (attempts > 1) {
+                    URE_Logger.info('Lock acquired after ' + attempts + ' attempts'
+                            + ' | object=' + objectApiName + ' | Id=' + recordId)
+                        .category(URE_Logger.Category.LOCK)
+                        .inClass(CLS).inMethod('attemptLock')
+                        .forObject(objectApiName)
+                        .forRecord(recordId)
+                        .log();
                 }
 
                 return outcomeLocked(locked, attempts);
 
             } catch (QueryException qe) {
-                // UNABLE_TO_LOCK_ROW — another transaction holds this row
-                System.debug(LoggingLevel.WARN,
-                    'RetryLockHandler: lock contention on ' + objectApiName
-                    + ' Id=' + recordId + ' attempt ' + attempts
-                    + '/' + MAX_RETRIES + ': ' + qe.getMessage());
-
-                // Continue to next iteration if retries remain
+                URE_Logger.warn('Lock contention | object=' + objectApiName
+                        + ' | Id=' + recordId
+                        + ' | attempt=' + attempts + '/' + MAX_RETRIES)
+                    .category(URE_Logger.Category.LOCK)
+                    .inClass(CLS).inMethod('attemptLock')
+                    .forObject(objectApiName)
+                    .forRecord(recordId)
+                    .log();
             }
         }
 
         // All retries exhausted
+        URE_Logger.error('Lock retries exhausted | object=' + objectApiName
+                + ' | Id=' + recordId + ' | attempts=' + attempts)
+            .category(URE_Logger.Category.LOCK)
+            .inClass(CLS).inMethod('attemptLock')
+            .forObject(objectApiName)
+            .forRecord(recordId)
+            .log();
+
         return outcomeExhausted(attempts);
     }
 
@@ -170,18 +198,18 @@ public with sharing class RetryLockHandler {
             totalAttempts += outcome.retryCount;
 
             if (outcome.success) {
-                // Return with cumulative attempts across all candidates
                 return outcomeLocked(outcome.lockedRecord, totalAttempts);
             }
 
-            // This candidate is locked by another agent or was deleted — try next
-            System.debug(LoggingLevel.INFO,
-                'RetryLockHandler: skipping candidate ' + candidate.Id
-                + ', reason: ' + outcome.errorMessage
-                + '. Trying next candidate.');
+            URE_Logger.info('Skipping candidate ' + candidate.Id
+                    + ' | reason: ' + outcome.errorMessage)
+                .category(URE_Logger.Category.LOCK)
+                .inClass(CLS).inMethod('lockFirstAvailable')
+                .forObject(objectApiName)
+                .forRecord(candidate.Id)
+                .log();
         }
 
-        // No candidate could be locked
         return outcomeExhausted(totalAttempts);
     }
 }

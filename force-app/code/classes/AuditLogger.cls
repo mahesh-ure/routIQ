@@ -2,21 +2,8 @@
  * @description Creates insert-only Routing_Log__c audit records from routing outcomes.
  *
  *              Routing_Log__c is the BUSINESS audit trail — always written, never disabled.
- *              It powers the RoutingStatus LWC, Health Dashboard, and compliance reports.
  *              This is distinct from URE_Logger (diagnostic observability that CAN be
  *              turned off via URE_Log_Config__mdt).
- *
- *              Design:
- *              • Thin mapper — translates AssignmentOutcome + context into Routing_Log__c fields.
- *              • Bulk-aware — collects all outcomes per transaction, single DML insert.
- *              • PII-safe — Query_Bind_Snapshot__c stores bind KEYS and list SIZES only,
- *                never raw values. AppExchange security review compliant.
- *              • DML uses AccessLevel.USER_MODE for CRUD/FLS enforcement.
- *
- *              Usage (called by RoutingEngine):
- *                List<AuditLogger.AuditEntry> entries = new List<AuditLogger.AuditEntry>();
- *                entries.add(AuditLogger.createEntry(outcome, bundle, request, spec));
- *                List<Id> logIds = AuditLogger.flush(entries, agentUserId, entryPoint);
  *
  *              Governor cost: 1 DML per flush (bulk insert). Zero SOQL.
  *
@@ -80,23 +67,20 @@ public with sharing class AuditLogger {
         log.Entry_Point__c = entryPoint;
         log.Routed_At__c   = System.now();
 
-        // ─── Bind Snapshot (PII-safe) ─────────────────────────────────────
         log.Query_Bind_Snapshot__c = sanitizeBindSnapshot(spec);
+
+        URE_Logger.debug('Audit entry created | config=' + bundle.developerName
+                + ' | status=' + outcome.status
+                + ' | recordId=' + outcome.recordId)
+            .category(URE_Logger.Category.AUDIT)
+            .inClass(CLS).inMethod('createEntry')
+            .forConfig(bundle.developerName)
+            .forObject(bundle.objectApiName)
+            .log();
 
         return new AuditEntry(log);
     }
 
-    /**
-     * @description Bulk-inserts all collected AuditEntries in a single DML call.
-     *              Returns the Ids of successfully inserted Routing_Log__c records,
-     *              indexed in the same order as the input list.
-     *
-     *              On partial failure (allOrNone=false), logs errors at ERROR level
-     *              but does not throw — routing should not fail because audit logging failed.
-     *
-     * @param entries  List of AuditEntries from createEntry() calls
-     * @return List of inserted Routing_Log__c Ids (null for any failed rows)
-     */
     public static List<Id> flush(List<AuditEntry> entries) {
         List<Id> logIds = new List<Id>();
 
@@ -110,25 +94,39 @@ public with sharing class AuditLogger {
             logs.add(entry.record);
         }
 
-        // Single bulk insert — 1 DML statement regardless of count
         List<Database.SaveResult> results = Database.insert(
             logs,
-            false,                  // allOrNone = false — partial success allowed
-            AccessLevel.USER_MODE   // CRUD/FLS enforced
+            false,
+            AccessLevel.USER_MODE
         );
+
+        Integer successCount = 0;
+        Integer failCount    = 0;
 
         for (Integer i = 0; i < results.size(); i++) {
             Database.SaveResult sr = results[i];
             if (sr.isSuccess()) {
                 logIds.add(sr.getId());
+                successCount++;
             } else {
                 logIds.add(null);
-                System.debug(LoggingLevel.ERROR,
-                    'AuditLogger: failed to insert Routing_Log__c for config='
-                    + logs[i].Config_Developer_Name__c
-                    + ': ' + formatErrors(sr.getErrors()));
+                failCount++;
+                String errMsg = formatErrors(sr.getErrors());
+                URE_Logger.error('Audit insert failed | config='
+                        + logs[i].Config_Developer_Name__c
+                        + ' | errors=' + errMsg)
+                    .category(URE_Logger.Category.AUDIT)
+                    .inClass(CLS).inMethod('flush')
+                    .log();
             }
         }
+
+        URE_Logger.info('Audit flush complete | inserted=' + successCount
+                + ' | failed=' + failCount)
+            .category(URE_Logger.Category.AUDIT)
+            .inClass(CLS).inMethod('flush')
+            .withLimits()
+            .log();
 
         return logIds;
     }

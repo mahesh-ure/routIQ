@@ -1,4 +1,4 @@
-/**
+z/**
  * @description Resolves Routing_Condition__mdt records into a typed bind-variable map
  *              for use with Database.queryWithBinds().
  *
@@ -17,6 +17,8 @@
  * @group Worker
  */
 public with sharing class ConditionBinder {
+
+    private static final String CLS = 'ConditionBinder';
 
     private static final Set<String> SCALAR_OPERATORS = new Set<String>{
         'LESS_THAN', 'GREATER_THAN', 'LESS_OR_EQUAL', 'GREATER_OR_EQUAL'
@@ -42,6 +44,10 @@ public with sharing class ConditionBinder {
         Map<String, Object> bindMap = new Map<String, Object>();
 
         if (conditions == null || conditions.isEmpty()) {
+            URE_Logger.debug('No conditions to resolve — empty bind map')
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('resolveAll')
+                .log();
             return bindMap;
         }
 
@@ -51,6 +57,16 @@ public with sharing class ConditionBinder {
 
             // Step 1 — Resolve raw string values from the configured source
             List<String> rawValues = resolveRawValues(cond, userAttributes);
+
+            URE_Logger.debug('Condition b' + i
+                    + ' | field=' + cond.Field_API_Name__c
+                    + ' | op=' + cond.Operator__c
+                    + ' | source=' + cond.Value_Source__c
+                    + ' | type=' + cond.Value_Type__c
+                    + ' | rawCount=' + rawValues.size())
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('resolveAll')
+                .log();
 
             // Step 2 — Cast to the target type and store in bind map
             String valueType = (String.isNotBlank(cond.Value_Type__c))
@@ -63,6 +79,12 @@ public with sharing class ConditionBinder {
                 bindMap.put(bindKey, castList(rawValues, valueType));
             }
         }
+
+        URE_Logger.debug('Bind resolution complete | conditions=' + conditions.size()
+                + ' | bindKeys=' + bindMap.size())
+            .category(URE_Logger.Category.CONDITION_BIND)
+            .inClass(CLS).inMethod('resolveAll')
+            .log();
 
         return bindMap;
     }
@@ -116,18 +138,25 @@ public with sharing class ConditionBinder {
         List<String> result = new List<String>();
 
         if (userAttributes == null || String.isBlank(cond.User_Attribute_Field__c)) {
+            URE_Logger.warn('USER_ATTRIBUTE condition has no attributes map or field name'
+                    + ' | field=' + cond.User_Attribute_Field__c)
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('resolveUserAttribute')
+                .log();
             return result;
         }
 
         Object fieldValue = userAttributes.get(cond.User_Attribute_Field__c);
         if (fieldValue == null) {
+            URE_Logger.debug('User attribute is null for field='
+                    + cond.User_Attribute_Field__c + ' — will produce empty bind list')
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('resolveUserAttribute')
+                .log();
             return result;
         }
 
-        // Convert to string for uniform parsing
         String stringValue = String.valueOf(fieldValue);
-
-        // Multi-select picklists use semicolons as delimiters
         for (String item : stringValue.split(';')) {
             String trimmed = item.trim();
             if (String.isNotBlank(trimmed)) {
@@ -160,7 +189,6 @@ public with sharing class ConditionBinder {
                 return castToDateTimeList(rawValues);
             }
             when else {
-                // 'String' or unknown — return as-is
                 return rawValues;
             }
         }
@@ -172,8 +200,10 @@ public with sharing class ConditionBinder {
             try {
                 result.add(Decimal.valueOf(val));
             } catch (Exception e) {
-                System.debug(LoggingLevel.WARN,
-                    'ConditionBinder: skipping unparseable Decimal value "' + val + '": ' + e.getMessage());
+                URE_Logger.warn('Skipping unparseable Decimal "' + val + '"')
+                    .category(URE_Logger.Category.CONDITION_BIND)
+                    .inClass(CLS).inMethod('castToDecimalList')
+                    .log();
             }
         }
         return result;
@@ -188,7 +218,6 @@ public with sharing class ConditionBinder {
             } else if (lower == 'false') {
                 result.add(false);
             }
-            // Skip non-boolean values
         }
         return result;
     }
@@ -199,8 +228,10 @@ public with sharing class ConditionBinder {
             try {
                 result.add(Date.valueOf(val));
             } catch (Exception e) {
-                System.debug(LoggingLevel.WARN,
-                    'ConditionBinder: skipping unparseable Date value "' + val + '": ' + e.getMessage());
+                URE_Logger.warn('Skipping unparseable Date "' + val + '"')
+                    .category(URE_Logger.Category.CONDITION_BIND)
+                    .inClass(CLS).inMethod('castToDateList')
+                    .log();
             }
         }
         return result;
@@ -212,8 +243,10 @@ public with sharing class ConditionBinder {
             try {
                 result.add(DateTime.valueOf(val));
             } catch (Exception e) {
-                System.debug(LoggingLevel.WARN,
-                    'ConditionBinder: skipping unparseable DateTime value "' + val + '": ' + e.getMessage());
+                URE_Logger.warn('Skipping unparseable DateTime "' + val + '"')
+                    .category(URE_Logger.Category.CONDITION_BIND)
+                    .inClass(CLS).inMethod('castToDateTimeList')
+                    .log();
             }
         }
         return result;
@@ -257,8 +290,10 @@ public with sharing class ConditionBinder {
         try {
             return Decimal.valueOf(val);
         } catch (Exception e) {
-            System.debug(LoggingLevel.WARN,
-                'ConditionBinder: unparseable Decimal scalar "' + val + '": ' + e.getMessage());
+            URE_Logger.warn('Unparseable Decimal scalar "' + val + '"')
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('castToDecimal')
+                .log();
             return null;
         }
     }
@@ -278,8 +313,10 @@ public with sharing class ConditionBinder {
         try {
             return Date.valueOf(val);
         } catch (Exception e) {
-            System.debug(LoggingLevel.WARN,
-                'ConditionBinder: unparseable Date scalar "' + val + '": ' + e.getMessage());
+            URE_Logger.warn('Unparseable Date scalar "' + val + '"')
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('castToDate')
+                .log();
             return null;
         }
     }
@@ -288,8 +325,10 @@ public with sharing class ConditionBinder {
         try {
             return DateTime.valueOf(val);
         } catch (Exception e) {
-            System.debug(LoggingLevel.WARN,
-                'ConditionBinder: unparseable DateTime scalar "' + val + '": ' + e.getMessage());
+            URE_Logger.warn('Unparseable DateTime scalar "' + val + '"')
+                .category(URE_Logger.Category.CONDITION_BIND)
+                .inClass(CLS).inMethod('castToDateTime')
+                .log();
             return null;
         }
     }
