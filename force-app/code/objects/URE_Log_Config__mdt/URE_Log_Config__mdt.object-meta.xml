@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Controls URE Logger behaviour. One record named Default. Zero deployment to change log level or disable logging entirely.</description>
+    <label>URE Log Config</label>
+    <pluralLabel>URE Log Configs</pluralLabel>
+    <visibility>Public</visibility>
+</CustomObject>

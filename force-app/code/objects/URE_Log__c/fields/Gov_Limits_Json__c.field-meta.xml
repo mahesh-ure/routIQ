@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Gov_Limits_Json__c</fullName>
+    <description>Full JSON snapshot of all governor limits at flush time. Machine-parseable for dashboard queries.</description>
+    <externalId>false</externalId>
+    <label>Gov Limits Json</label>
+    <length>32768</length>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>
