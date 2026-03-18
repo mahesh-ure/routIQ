@@ -1,0 +1,177 @@
+/**
+ * @description Value object that holds a single routing configuration with its associated
+ *              conditions and priorities. Created by ConfigLoader — one bundle per active
+ *              Routing_Config__mdt record.
+ *
+ *              Implements Comparable to allow List<ConfigBundle>.sort() by Priority_Weight__c
+ *              (lower weight = higher priority = earlier in list).
+ *
+ *              Pre-parses comma-delimited config fields once during construction so
+ *              downstream consumers (DynamicQueryBuilder, RoutingEngine, AssignmentResolver)
+ *              never repeat parsing logic.
+ *
+ * @group Worker
+ */
+public with sharing class ConfigBundle implements Comparable {
+
+    // ─── Raw CMDT records ────────────────────────────────────────────────────
+
+    public Routing_Config__mdt config;
+    public List<Routing_Condition__mdt> conditions;
+    public List<Routing_Priority__mdt> priorities;
+
+    // ─── Pre-parsed convenience values ───────────────────────────────────────
+
+    public String developerName;
+    public String objectApiName;
+    public String ownerFieldApiName;
+    public Integer candidateLimit;
+    public Boolean allowMultiple;
+    public String preAssignmentOwnerType;
+    public List<String> closedStatusValues;
+    public List<String> recordTypeDevNames;
+    public List<String> selectFields;
+
+    // ─── Constructor ─────────────────────────────────────────────────────────
+
+    /**
+     * @description Builds a bundle from a config and its child records. Sorts conditions
+     *              and priorities by Sort_Order__c ascending. Pre-parses comma-delimited
+     *              config fields.
+     * @param config     The parent Routing Config CMDT record
+     * @param conditions Active conditions for this config (filtered upstream by ConfigLoader)
+     * @param priorities Priority sort specs for this config
+     */
+    public ConfigBundle(
+        Routing_Config__mdt config,
+        List<Routing_Condition__mdt> conditions,
+        List<Routing_Priority__mdt> priorities
+    ) {
+        this.config = config;
+        this.conditions = sortConditions(conditions);
+        this.priorities = sortPriorities(priorities);
+
+        this.developerName = config.DeveloperName;
+        this.objectApiName = config.Object_API_Name__c;
+        this.ownerFieldApiName = config.Owner_Field_API_Name__c;
+        this.candidateLimit = (config.Candidate_Limit__c != null)
+            ? config.Candidate_Limit__c.intValue()
+            : 50;
+        this.allowMultiple = (config.Allow_Multiple__c == true);
+        this.preAssignmentOwnerType = config.Pre_Assignment_Owner_Type__c;
+        this.closedStatusValues = parseCommaDelimited(config.Closed_Status_Values__c);
+        this.recordTypeDevNames = parseCommaDelimited(config.Record_Type_Dev_Name__c);
+        this.selectFields = parseCommaDelimited(config.Select_Fields__c);
+    }
+
+    // ─── Comparable — sort bundles by Priority_Weight__c ascending ────────────
+
+    public Integer compareTo(Object other) {
+        ConfigBundle otherBundle = (ConfigBundle) other;
+        Integer thisWeight = (this.config.Priority_Weight__c != null)
+            ? this.config.Priority_Weight__c.intValue()
+            : 999999;
+        Integer otherWeight = (otherBundle.config.Priority_Weight__c != null)
+            ? otherBundle.config.Priority_Weight__c.intValue()
+            : 999999;
+        if (thisWeight < otherWeight) {
+            return -1;
+        }
+        if (thisWeight > otherWeight) {
+            return 1;
+        }
+        return 0;
+    }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
+
+    /**
+     * @description Splits a comma-delimited string into a trimmed, non-blank list.
+     */
+    private static List<String> parseCommaDelimited(String value) {
+        List<String> result = new List<String>();
+        if (String.isBlank(value)) {
+            return result;
+        }
+        for (String item : value.split(',')) {
+            String trimmed = item.trim();
+            if (String.isNotBlank(trimmed)) {
+                result.add(trimmed);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @description Sorts conditions by Sort_Order__c ascending. Null sort order
+     *              falls to the end. Uses Map + sorted key list to avoid Comparable
+     *              wrappers on CMDT records.
+     */
+    private static List<Routing_Condition__mdt> sortConditions(
+        List<Routing_Condition__mdt> unsorted
+    ) {
+        if (unsorted == null || unsorted.isEmpty()) {
+            return new List<Routing_Condition__mdt>();
+        }
+        if (unsorted.size() == 1) {
+            return unsorted;
+        }
+
+        Map<Decimal, List<Routing_Condition__mdt>> grouped =
+            new Map<Decimal, List<Routing_Condition__mdt>>();
+        List<Decimal> sortKeys = new List<Decimal>();
+
+        for (Routing_Condition__mdt c : unsorted) {
+            Decimal key = (c.Sort_Order__c != null) ? c.Sort_Order__c : 999999;
+            if (!grouped.containsKey(key)) {
+                grouped.put(key, new List<Routing_Condition__mdt>());
+                sortKeys.add(key);
+            }
+            grouped.get(key).add(c);
+        }
+
+        sortKeys.sort();
+
+        List<Routing_Condition__mdt> sorted = new List<Routing_Condition__mdt>();
+        for (Decimal key : sortKeys) {
+            sorted.addAll(grouped.get(key));
+        }
+        return sorted;
+    }
+
+    /**
+     * @description Sorts priorities by Sort_Order__c ascending. Same pattern as
+     *              sortConditions — separated to avoid SObject casting issues in Apex.
+     */
+    private static List<Routing_Priority__mdt> sortPriorities(
+        List<Routing_Priority__mdt> unsorted
+    ) {
+        if (unsorted == null || unsorted.isEmpty()) {
+            return new List<Routing_Priority__mdt>();
+        }
+        if (unsorted.size() == 1) {
+            return unsorted;
+        }
+
+        Map<Decimal, List<Routing_Priority__mdt>> grouped =
+            new Map<Decimal, List<Routing_Priority__mdt>>();
+        List<Decimal> sortKeys = new List<Decimal>();
+
+        for (Routing_Priority__mdt p : unsorted) {
+            Decimal key = (p.Sort_Order__c != null) ? p.Sort_Order__c : 999999;
+            if (!grouped.containsKey(key)) {
+                grouped.put(key, new List<Routing_Priority__mdt>());
+                sortKeys.add(key);
+            }
+            grouped.get(key).add(p);
+        }
+
+        sortKeys.sort();
+
+        List<Routing_Priority__mdt> sorted = new List<Routing_Priority__mdt>();
+        for (Decimal key : sortKeys) {
+            sorted.addAll(grouped.get(key));
+        }
+        return sorted;
+    }
+}
