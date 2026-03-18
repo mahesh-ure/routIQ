@@ -84,12 +84,12 @@ private class URE_Logger_Test {
     @IsTest
     static void govLimits_toJson_isValidJson() {
         Test.startTest();
-        String json = URE_GovLimits.capture().toJson();
+        String jsonStr = URE_GovLimits.capture().toJson();
         Test.stopTest();
 
-        System.assert(String.isNotBlank(json), 'JSON should not be blank');
+        System.assert(String.isNotBlank(jsonStr), 'JSON should not be blank');
         // Verify it deserialises without throwing
-        Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(json);
+        Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(jsonStr);
         System.assert(parsed.containsKey('soql'), 'JSON should contain soql key');
         System.assert(parsed.containsKey('cpu'),  'JSON should contain cpu key');
         System.assert(parsed.containsKey('heap'), 'JSON should contain heap key');
@@ -377,7 +377,7 @@ private class URE_Logger_Test {
         URE_Logger.info ('info entry') .category(URE_Logger.Category.CANDIDATE).log();
         URE_Logger.warn ('warn entry') .category(URE_Logger.Category.LOCK).log();
         URE_Logger.error('error entry').category(URE_Logger.Category.ASSIGNMENT).log();
-        URE_Logger.fatal('fatal entry').category(URE_Logger.Category.SYSTEM).log();
+        URE_Logger.fatal('fatal entry').category(URE_Logger.Category.ENGINE).log();
         URE_Logger.perf ('perf entry') .category(URE_Logger.Category.PERFORMANCE).log();
         Test.stopTest();
 

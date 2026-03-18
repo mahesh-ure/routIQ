@@ -97,7 +97,7 @@ public without sharing class URE_Logger {
      * without parsing message text.
      */
     public enum Category {
-        SYSTEM,           // Logger lifecycle (init, flush, config load)
+        ENGINE,           // Logger lifecycle (init, flush, config load)
         CONFIG,           // ConfigLoader — CMDT reads and bundle assembly
         CONDITION_BIND,   // ConditionBinder — STATIC and USER_ATTRIBUTE resolution
         QUERY_BUILD,      // DynamicQueryBuilder — SOQL string assembly
@@ -197,7 +197,7 @@ public without sharing class URE_Logger {
             rec                = new EntryBuffer();
             rec.level          = lvl;
             rec.message        = truncate(msg, 4000);
-            rec.category       = Category.SYSTEM;
+            rec.category       = Category.ENGINE;
             rec.entryTime      = System.now();
             rec.elapsedMs      = txStartMs == null ? 0L
                                  : (System.currentTimeMillis() - txStartMs);
@@ -361,7 +361,7 @@ public without sharing class URE_Logger {
              + ' | entryPoint=' + ep
              + ' | user=' + userId
              + ' | frameworkVersion=' + FRAMEWORK_VERSION)
-            .category(Category.SYSTEM)
+            .category(Category.ENGINE)
             .inClass('URE_Logger')
             .inMethod('init')
             .withLimits()
@@ -431,6 +431,9 @@ public without sharing class URE_Logger {
         if (!isInitialized || !isEnabled) return null;
 
         Long endMs = System.currentTimeMillis();
+        if (txStartMs == null)      txStartMs     = endMs;
+        if (transactionId == null)  transactionId  = generateTransactionId();
+        if (entryPoint == null)     entryPoint     = 'Test';
 
         // Take a final snapshot BEFORE our own DML adds to the counters
         URE_GovLimits finalLimits = URE_GovLimits.capture();
@@ -455,7 +458,7 @@ public without sharing class URE_Logger {
              + ' | configs=['   + String.join(new List<String>(configsInvoked), ',') + ']'
              + ' | objects=['   + String.join(new List<String>(objectsRouted),  ',') + ']'
              + ' | '            + finalLimits.toCompactDisplay())
-            .category(Category.SYSTEM)
+            .category(Category.ENGINE)
             .inClass('URE_Logger')
             .inMethod('flush')
             .log();

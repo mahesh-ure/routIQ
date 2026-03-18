@@ -12,9 +12,9 @@
         <valueSetDefinition>
             <sorted>false</sorted>
             <value>
-                <fullName>SYSTEM</fullName>
+                <fullName>ENGINE</fullName>
                 <default>false</default>
-                <label>SYSTEM</label>
+                <label>ENGINE</label>
             </value>
             <value>
                 <fullName>CONFIG</fullName>

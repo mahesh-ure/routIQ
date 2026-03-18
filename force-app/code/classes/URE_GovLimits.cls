@@ -171,29 +171,63 @@ public without sharing class URE_GovLimits {
      * Returns a serialised map, not this object, to control field visibility.
      */
     public String toJson() {
-        Map<String, Object> m = new Map<String, Object>{
-            'capturedAt'    => capturedAt,
-            'soql'          => new Map<String,Object>{ 'used'=>soqlUsed,     'limit'=>soqlLimit,      'pct'=>soqlPct      },
-            'dmlStatements' => new Map<String,Object>{ 'used'=>dmlStmtsUsed, 'limit'=>dmlStmtsLimit                       },
-            'dmlRows'       => new Map<String,Object>{ 'used'=>dmlRowsUsed,  'limit'=>dmlRowsLimit,   'pct'=>dmlRowsPct   },
-            'cpu'           => new Map<String,Object>{ 'usedMs'=>cpuUsedMs,  'limitMs'=>cpuLimitMs,   'pct'=>cpuPct       },
-            'heap'          => new Map<String,Object>{ 'usedBytes'=>heapUsedBytes,'limitBytes'=>heapLimitBytes,'pct'=>heapPct },
-            'queryRows'     => new Map<String,Object>{ 'used'=>queryRowsUsed,'limit'=>queryRowsLimit,  'pct'=>queryRowsPct },
-            'callouts'      => new Map<String,Object>{ 'used'=>calloutsUsed, 'limit'=>calloutLimit                        }
-        };
+        Map<String, Object> m = new Map<String, Object>();
+        m.put('capturedAt', capturedAt);
+
+        Map<String,Object> soqlMap = new Map<String,Object>();
+        soqlMap.put('used', soqlUsed);
+        soqlMap.put('max', soqlLimit);
+        soqlMap.put('pct', soqlPct);
+        m.put('soql', soqlMap);
+
+        Map<String,Object> dmlMap = new Map<String,Object>();
+        dmlMap.put('used', dmlStmtsUsed);
+        dmlMap.put('max', dmlStmtsLimit);
+        m.put('dmlStatements', dmlMap);
+
+        Map<String,Object> dmlRowMap = new Map<String,Object>();
+        dmlRowMap.put('used', dmlRowsUsed);
+        dmlRowMap.put('max', dmlRowsLimit);
+        dmlRowMap.put('pct', dmlRowsPct);
+        m.put('dmlRows', dmlRowMap);
+
+        Map<String,Object> cpuMap = new Map<String,Object>();
+        cpuMap.put('usedMs', cpuUsedMs);
+        cpuMap.put('maxMs', cpuLimitMs);
+        cpuMap.put('pct', cpuPct);
+        m.put('cpu', cpuMap);
+
+        Map<String,Object> heapMap = new Map<String,Object>();
+        heapMap.put('usedBytes', heapUsedBytes);
+        heapMap.put('maxBytes', heapLimitBytes);
+        heapMap.put('pct', heapPct);
+        m.put('heap', heapMap);
+
+        Map<String,Object> qrowMap = new Map<String,Object>();
+        qrowMap.put('used', queryRowsUsed);
+        qrowMap.put('max', queryRowsLimit);
+        qrowMap.put('pct', queryRowsPct);
+        m.put('queryRows', qrowMap);
+
+        Map<String,Object> coMap = new Map<String,Object>();
+        coMap.put('used', calloutsUsed);
+        coMap.put('max', calloutLimit);
+        m.put('callouts', coMap);
+
         return JSON.serialize(m);
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────────────
 
-    private static Decimal pct(Long used, Long limit) {
-        if (limit == null || limit == 0) return 0;
-        return (used * 100.0 / limit).setScale(1, RoundingMode.HALF_UP);
+    private static Decimal pct(Long used, Long cap) {
+        if (cap == null || cap == 0) return 0;
+        return (used * 100.0 / cap).setScale(1, RoundingMode.HALF_UP);
     }
 
-    private static Decimal pct(Integer used, Integer limit) {
-        return pct(Long.valueOf(used == null ? 0 : used),
-                   Long.valueOf(limit == null ? 0 : limit));
+    private static Decimal pct(Integer used, Integer cap) {
+        Long usedL = used == null ? 0L : (Long) used;
+        Long capL  = cap  == null ? 0L : (Long) cap;
+        return pct(usedL, capL);
     }
 
     /** Convert bytes → KB, rounded. */
