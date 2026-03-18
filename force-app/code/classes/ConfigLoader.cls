@@ -13,17 +13,11 @@
  */
 public with sharing class ConfigLoader {
 
+    private static final String CLS = 'ConfigLoader';
+
     /**
      * @description Loads all active routing configurations with their active conditions
      *              and priority sort specifications.
-     *
-     *              Processing steps:
-     *              1. Read all three CMDT types (zero SOQL)
-     *              2. Build configId → DeveloperName reverse map
-     *              3. Group active conditions by parent config DeveloperName
-     *              4. Group priorities by parent config DeveloperName
-     *              5. Build one ConfigBundle per active config
-     *              6. Sort bundles by Priority_Weight__c (lower = higher priority)
      *
      * @return Sorted list of ConfigBundles. Empty list if no active configs exist.
      */
@@ -37,9 +31,14 @@ public with sharing class ConfigLoader {
         Map<String, Routing_Priority__mdt> allPriorities =
             RoutingConfigSelector.getAllPriorities();
 
+        URE_Logger.debug('CMDT loaded | configs=' + allConfigs.size()
+                + ' | conditions=' + allConditions.size()
+                + ' | priorities=' + allPriorities.size())
+            .category(URE_Logger.Category.CONFIG)
+            .inClass(CLS).inMethod('loadActive')
+            .log();
+
         // Step 2 — Build reverse map: configId → DeveloperName
-        //          Needed because child CMDT records reference parent by Id,
-        //          but we group by DeveloperName (the stable business key).
         Map<Id, String> configIdToDevName = new Map<Id, String>();
         for (Routing_Config__mdt cfg : allConfigs.values()) {
             configIdToDevName.put(cfg.Id, cfg.DeveloperName);
@@ -50,14 +49,17 @@ public with sharing class ConfigLoader {
             new Map<String, List<Routing_Condition__mdt>>();
 
         for (Routing_Condition__mdt cond : allConditions.values()) {
-            // Skip inactive conditions
             if (cond.Is_Active__c != true) {
                 continue;
             }
 
             String parentDevName = configIdToDevName.get(cond.Routing_Config__c);
             if (parentDevName == null) {
-                continue; // orphan condition — parent config deleted or inactive
+                URE_Logger.debug('Orphan condition skipped: ' + cond.DeveloperName)
+                    .category(URE_Logger.Category.CONFIG)
+                    .inClass(CLS).inMethod('loadActive')
+                    .log();
+                continue;
             }
 
             if (!conditionsByConfig.containsKey(parentDevName)) {
@@ -76,7 +78,7 @@ public with sharing class ConfigLoader {
         for (Routing_Priority__mdt pri : allPriorities.values()) {
             String parentDevName = configIdToDevName.get(pri.Routing_Config__c);
             if (parentDevName == null) {
-                continue; // orphan priority
+                continue;
             }
 
             if (!prioritiesByConfig.containsKey(parentDevName)) {
@@ -90,10 +92,11 @@ public with sharing class ConfigLoader {
 
         // Step 5 — Build one ConfigBundle per ACTIVE config
         List<ConfigBundle> bundles = new List<ConfigBundle>();
+        Integer skippedInactive = 0;
 
         for (Routing_Config__mdt cfg : allConfigs.values()) {
-            // Skip inactive configs
             if (cfg.Active__c != true) {
+                skippedInactive++;
                 continue;
             }
 
@@ -111,8 +114,13 @@ public with sharing class ConfigLoader {
         }
 
         // Step 6 — Sort bundles by Priority_Weight__c ascending
-        //          (ConfigBundle implements Comparable)
         bundles.sort();
+
+        URE_Logger.info('Config load complete | activeBundles=' + bundles.size()
+                + ' | skippedInactive=' + skippedInactive)
+            .category(URE_Logger.Category.CONFIG)
+            .inClass(CLS).inMethod('loadActive')
+            .log();
 
         return bundles;
     }
