@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Candidate_Limit__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>50</defaultValue>
+    <description>Maximum records returned per candidate query. Controls governor limit exposure. Default 50. Higher values increase lock-contention resilience at the cost of query selectivity.</description>
+    <label>Candidate Limit</label>
+    <precision>18</precision>
+    <required>true</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

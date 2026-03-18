@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/mahes/OneDrive/Desktop/SF/URE_repo/routIQ -type f \\\\\\(-name *.cls -o -name *.trigger -o -name *.js -o -name *.html -o -name *.xml -o -name *.json \\\\\\))",
+      "Bash(find /c/Users/mahes/OneDrive/Desktop/SF/URE_repo/routIQ -path *.git* -prune -o -type f \\\\\\(-name *.cls -o -name *.trigger -o -name *.object -o -name *.cmp -o -name *.js -o -name *.xml \\\\\\) -print)",
+      "Bash(sf project:*)"
+    ]
+  }
+}

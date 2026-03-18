@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Allow_Multiple__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>true</defaultValue>
+    <description>If false, agent cannot receive another record of this object type if they already own an open one. Uses Closed_Status_Values__c to determine open vs closed.</description>
+    <label>Allow Multiple</label>
+    <type>Checkbox</type>
+</CustomField>

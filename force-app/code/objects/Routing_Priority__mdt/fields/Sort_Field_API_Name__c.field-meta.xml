@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Sort_Field_API_Name__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Field API name to sort by. Must appear in SELECT clause — engine enforces this at runtime. e.g. CreatedDate, Priority.</description>
+    <label>Sort Field API Name</label>
+    <length>255</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>
