@@ -7,6 +7,18 @@
  *              same candidate. This handler retries a lock-acquiring operation up to
  *              MAX_RETRIES times, giving concurrent transactions time to complete.
  *
+ *              Design decisions:
+ *              • Retry bound is a constant (5) — sufficient for typical contention
+ *                without exhausting CPU limits. Salesforce CPU limit is 10s/60s;
+ *                each retry attempt is sub-millisecond overhead.
+ *              • Does NOT use Thread.sleep() — Apex doesn't support it and retries
+ *                are immediate. The lock wait happens inside the SOQL FOR UPDATE
+ *                itself (Salesforce waits ~5s per attempt before throwing).
+ *              • Returns a structured RetryOutcome so callers get the locked record,
+ *                success/failure, and retry count without try-catch boilerplate.
+ *              • Lock contention is expected in high-concurrency routing — it is NOT
+ *                an error condition, just a signal to try the next candidate.
+ *
  *              Cost: 0 SOQL / 0 DML — delegates to AssignmentSelector.lockRecord().
  *
  * @group Worker
@@ -20,6 +32,11 @@ public with sharing class RetryLockHandler {
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
+    /**
+     * @description Outcome of a lock attempt with retry tracking.
+     *              Factory methods live on the outer class because Apex does not
+     *              allow static methods on inner classes.
+     */
     public class RetryOutcome {
         public SObject lockedRecord { get; private set; }
         public Boolean success      { get; private set; }
@@ -31,8 +48,11 @@ public with sharing class RetryLockHandler {
         private RetryOutcome() {}
     }
 
-    // ─── RetryOutcome Factories ─────────────────────────────────────────────
+    // ─── RetryOutcome Factories (outer-class statics) ─────────────────────────
 
+    /**
+     * @description Creates outcome for a successful lock acquisition.
+     */
     private static RetryOutcome outcomeLocked(SObject record, Integer retries) {
         RetryOutcome o = new RetryOutcome();
         o.lockedRecord = record;
@@ -42,6 +62,10 @@ public with sharing class RetryLockHandler {
         return o;
     }
 
+    /**
+     * @description Creates outcome when the record vanished between candidate query
+     *              and lock attempt (deleted or no longer visible).
+     */
     private static RetryOutcome outcomeRecordGone(Integer retries) {
         RetryOutcome o = new RetryOutcome();
         o.success = false;
@@ -51,6 +75,9 @@ public with sharing class RetryLockHandler {
         return o;
     }
 
+    /**
+     * @description Creates outcome when all retry attempts are exhausted.
+     */
     private static RetryOutcome outcomeExhausted(Integer retries) {
         RetryOutcome o = new RetryOutcome();
         o.success = false;
@@ -62,6 +89,20 @@ public with sharing class RetryLockHandler {
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
+    /**
+     * @description Attempts to acquire a row lock on a single candidate record via
+     *              AssignmentSelector.lockRecord(), retrying up to MAX_RETRIES times
+     *              on UNABLE_TO_LOCK_ROW.
+     *
+     *              On each contention failure the handler catches QueryException and
+     *              immediately retries — the next attempt will queue behind any
+     *              competing lock inside the database engine.
+     *
+     * @param objectApiName    SObject API name (from ConfigBundle)
+     * @param ownerFieldApiName Owner field API name (from ConfigBundle)
+     * @param recordId          Id of the candidate to lock
+     * @return RetryOutcome with locked record on success, or failure details
+     */
     public static RetryOutcome attemptLock(
         String objectApiName,
         String ownerFieldApiName,
@@ -125,6 +166,20 @@ public with sharing class RetryLockHandler {
         return outcomeExhausted(attempts);
     }
 
+    /**
+     * @description Attempts to lock candidates from an ordered list, trying the next
+     *              candidate when the current one fails all lock retries.
+     *
+     *              This is the primary method used by AssignmentResolver — it walks
+     *              the priority-sorted candidate list and returns the first record
+     *              that can be successfully locked.
+     *
+     * @param objectApiName     SObject API name
+     * @param ownerFieldApiName Owner field API name
+     * @param candidates        Priority-sorted candidate records from CandidateSelector
+     * @return RetryOutcome for the first successfully locked candidate,
+     *         or an exhausted outcome if no candidate could be locked
+     */
     public static RetryOutcome lockFirstAvailable(
         String objectApiName,
         String ownerFieldApiName,

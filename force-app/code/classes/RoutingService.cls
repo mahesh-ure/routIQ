@@ -205,6 +205,7 @@ global with sharing class RoutingService {
                 request, agentUserId, entryPoint
             );
 
+            // Ensure entryPoint is stamped (engine may not set it on all paths)
             if (result.entryPoint == null) {
                 result.entryPoint = entryPoint;
             }

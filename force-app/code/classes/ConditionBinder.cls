@@ -1,4 +1,4 @@
-/**
+z/**
  * @description Resolves Routing_Condition__mdt records into a typed bind-variable map
  *              for use with Database.queryWithBinds().
  *
@@ -28,9 +28,11 @@ public with sharing class ConditionBinder {
 
     /**
      * @description Resolves all conditions into a single bind map keyed b0, b1, b2…
+     *              Each value is typed to match Value_Type__c so Database.queryWithBinds()
+     *              generates correct SOQL literals.
      *
      * @param conditions     Sorted condition list from ConfigBundle
-     * @param agentUserId    Id of the requesting agent
+     * @param agentUserId    Id of the requesting agent (reserved for future attribute lookup)
      * @param userAttributes Pre-queried map of User field API name → field value
      * @return Bind map ready for Database.queryWithBinds()
      */
@@ -89,6 +91,9 @@ public with sharing class ConditionBinder {
 
     // ─── Value Resolution ──────────────────────────────────────────────────────
 
+    /**
+     * @description Routes to the correct value source and returns raw string values.
+     */
     private static List<String> resolveRawValues(
         Routing_Condition__mdt cond,
         Map<String, Object> userAttributes
@@ -96,9 +101,13 @@ public with sharing class ConditionBinder {
         if (cond.Value_Source__c == 'USER_ATTRIBUTE') {
             return resolveUserAttribute(cond, userAttributes);
         }
+        // Default: STATIC
         return parseCommaDelimited(cond.Values__c);
     }
 
+    /**
+     * @description Splits a comma-delimited string into trimmed, non-blank values.
+     */
     private static List<String> parseCommaDelimited(String value) {
         List<String> result = new List<String>();
         if (String.isBlank(value)) {
@@ -113,6 +122,15 @@ public with sharing class ConditionBinder {
         return result;
     }
 
+    /**
+     * @description Resolves a value from the pre-queried user attributes map.
+     *              Multi-select picklist values (semicolon-delimited) are split
+     *              into individual entries.
+     *
+     *              Returns empty list when the field is null or missing — this
+     *              yields zero matches in an IN clause, which is the correct
+     *              behavior (user lacks the required attribute).
+     */
     private static List<String> resolveUserAttribute(
         Routing_Condition__mdt cond,
         Map<String, Object> userAttributes
@@ -151,6 +169,11 @@ public with sharing class ConditionBinder {
 
     // ─── Type Casting — Lists ──────────────────────────────────────────────────
 
+    /**
+     * @description Casts raw string values into a properly typed List for set operators.
+     *              Database.queryWithBinds() requires the runtime type of the list to match
+     *              the SOQL field type (e.g. List<Decimal> for Number fields, not List<Object>).
+     */
     private static Object castList(List<String> rawValues, String valueType) {
         switch on valueType {
             when 'Number' {
@@ -231,11 +254,17 @@ public with sharing class ConditionBinder {
 
     // ─── Type Casting — Scalars ────────────────────────────────────────────────
 
+    /**
+     * @description Casts the first parseable raw value into a typed scalar for comparison
+     *              operators (LESS_THAN, GREATER_THAN, LESS_OR_EQUAL, GREATER_OR_EQUAL).
+     *              Returns null if no parseable value exists.
+     */
     private static Object castScalar(List<String> rawValues, String valueType) {
         if (rawValues.isEmpty()) {
             return null;
         }
 
+        // For scalar operators, only the first value is meaningful
         String firstValue = rawValues[0];
 
         switch on valueType {

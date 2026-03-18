@@ -11,10 +11,12 @@
  */
 public with sharing class AuditLogger {
 
-    private static final String CLS = 'AuditLogger';
-
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
+    /**
+     * @description Pre-mapped Routing_Log__c record ready for bulk insert.
+     *              Built by createEntry(), collected by the engine, flushed once.
+     */
     public class AuditEntry {
         public Routing_Log__c record { get; private set; }
 
@@ -26,6 +28,17 @@ public with sharing class AuditLogger {
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
+    /**
+     * @description Maps a single AssignmentOutcome into an AuditEntry ready for flush.
+     *              Called once per ConfigBundle evaluated by RoutingEngine.
+     *
+     * @param outcome    Assignment result from AssignmentResolver
+     * @param bundle     The config bundle that was evaluated
+     * @param agentUserId Agent who initiated the routing request (pull model)
+     * @param entryPoint Integration surface (InvocableMethod, REST, LWC, GlobalAction)
+     * @param spec       QuerySpec for bind snapshot (may be null if query was never built)
+     * @return AuditEntry ready to be added to the flush list
+     */
     public static AuditEntry createEntry(
         AssignmentResolver.AssignmentOutcome outcome,
         ConfigBundle bundle,
@@ -35,6 +48,7 @@ public with sharing class AuditLogger {
     ) {
         Routing_Log__c log = new Routing_Log__c();
 
+        // ─── From AssignmentOutcome ───────────────────────────────────────
         log.Record_Id__c = (outcome.recordId != null)
             ? String.valueOf(outcome.recordId)
             : null;
@@ -44,9 +58,11 @@ public with sharing class AuditLogger {
         log.Lock_Contention__c     = outcome.lockContention;
         log.Candidate_Count__c     = outcome.candidateCount;
 
+        // ─── From ConfigBundle ────────────────────────────────────────────
         log.Config_Developer_Name__c = bundle.developerName;
         log.Object_API_Name__c       = bundle.objectApiName;
 
+        // ─── From Request Context ─────────────────────────────────────────
         log.Assigned_To__c = (outcome.success) ? agentUserId : null;
         log.Entry_Point__c = entryPoint;
         log.Routed_At__c   = System.now();
@@ -72,6 +88,7 @@ public with sharing class AuditLogger {
             return logIds;
         }
 
+        // Extract SObject records for DML
         List<Routing_Log__c> logs = new List<Routing_Log__c>();
         for (AuditEntry entry : entries) {
             logs.add(entry.record);
@@ -116,6 +133,19 @@ public with sharing class AuditLogger {
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
+    /**
+     * @description Builds a PII-safe JSON snapshot of bind variable metadata.
+     *              Stores bind KEY names and the SIZE of each list — never raw values.
+     *
+     *              Example output:
+     *              {"b0":{"type":"List<String>","size":2},"b1":{"type":"List<Decimal>","size":1},"rtFilter":{"type":"List<String>","size":3}}
+     *
+     *              This satisfies AppExchange security review: no customer data in
+     *              Routing_Log__c records. Admins can still diagnose query shape issues.
+     *
+     * @param spec QuerySpec from DynamicQueryBuilder (may be null)
+     * @return JSON string or null if no spec/binds exist
+     */
     @TestVisible
     private static String sanitizeBindSnapshot(QuerySpec spec) {
         if (spec == null || spec.bindMap == null || spec.bindMap.isEmpty()) {
@@ -166,6 +196,9 @@ public with sharing class AuditLogger {
         return JSON.serialize(sanitized);
     }
 
+    /**
+     * @description Returns a safe type name for scalar bind values.
+     */
     private static String getTypeName(Object val) {
         if (val instanceof String)   { return 'String'; }
         if (val instanceof Decimal)  { return 'Decimal'; }
@@ -176,6 +209,9 @@ public with sharing class AuditLogger {
         return 'Object';
     }
 
+    /**
+     * @description Formats Database.Error list for debug logging.
+     */
     private static String formatErrors(List<Database.Error> errors) {
         if (errors == null || errors.isEmpty()) {
             return 'Unknown error.';

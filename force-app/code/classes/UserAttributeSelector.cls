@@ -18,6 +18,13 @@ public with sharing class UserAttributeSelector {
 
     // ─── Public API ────────────────────────────────────────────────────────────
 
+    /**
+     * @description Queries the specified User fields for a given agent.
+     *
+     * @param userId       The agent's User record Id
+     * @param fieldApiNames Set of User field API names to query (e.g. Department, Division)
+     * @return Map of field API name → field value. Empty map if user not found.
+     */
     public static Map<String, Object> getAttributes(
         Id userId,
         Set<String> fieldApiNames
@@ -85,6 +92,14 @@ public with sharing class UserAttributeSelector {
 
     // ─── Helper ────────────────────────────────────────────────────────────────
 
+    /**
+     * @description Scans a list of conditions and collects all User field API names
+     *              referenced by USER_ATTRIBUTE conditions. Used by the engine to
+     *              determine which fields to pre-query before calling ConditionBinder.
+     *
+     * @param conditions List of conditions from one or more ConfigBundles
+     * @return Set of User field API names. Empty set if no USER_ATTRIBUTE conditions.
+     */
     public static Set<String> collectRequiredFields(
         List<Routing_Condition__mdt> conditions
     ) {

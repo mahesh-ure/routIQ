@@ -226,6 +226,16 @@ public with sharing class RoutingEngine {
 
     // ─── Bundle Processing ────────────────────────────────────────────────────
 
+    /**
+     * @description Processes a single ConfigBundle through the full pipeline:
+     *              bind → build → query → assign → audit entry.
+     *
+     *              Catches exceptions per-bundle so one bad config does not kill the
+     *              entire routing transaction. Failed bundles produce a failure
+     *              audit entry and the engine continues to the next bundle.
+     *
+     * @return ProcessOutcome containing the assignment result and buffered audit entry
+     */
     private static ProcessOutcome processBundle(
         ConfigBundle bundle,
         RoutingRequest request,
@@ -284,6 +294,10 @@ public with sharing class RoutingEngine {
 
     // ─── Result Builders ──────────────────────────────────────────────────────
 
+    /**
+     * @description Builds a RoutingResult from a successful AssignmentOutcome.
+     *              The routingLogId is attached later after AuditLogger.flush().
+     */
     private static RoutingResult buildSuccessResult(
         AssignmentResolver.AssignmentOutcome outcome,
         Id agentUserId,
@@ -292,13 +306,18 @@ public with sharing class RoutingEngine {
         RoutingResult rr = RoutingResult.success(
             String.valueOf(outcome.recordId),
             String.valueOf(agentUserId),
-            null,
+            null,                   // routingLogId — set after flush
             outcome.retryCount
         );
         rr.entryPoint = entryPoint;
         return rr;
     }
 
+    /**
+     * @description Builds an AssignmentOutcome from an unexpected exception so
+     *              AuditLogger can record it. Delegates to AssignmentResolver's
+     *              public outcomeError() factory.
+     */
     private static AssignmentResolver.AssignmentOutcome buildExceptionOutcome(
         Exception ex
     ) {

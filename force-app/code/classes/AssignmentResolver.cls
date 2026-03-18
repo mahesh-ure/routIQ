@@ -14,10 +14,14 @@
  */
 public with sharing class AssignmentResolver {
 
-    private static final String CLS = 'AssignmentResolver';
-
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
+    /**
+     * @description Structured outcome of an assignment attempt. Consumed by
+     *              RoutingEngine to build RoutingResult and Routing_Log__c.
+     *              Factory methods live on the outer class because Apex does not
+     *              allow static methods on inner classes.
+     */
     public class AssignmentOutcome {
         public Id      recordId       { get; private set; }
         public Boolean success        { get; private set; }
@@ -31,8 +35,11 @@ public with sharing class AssignmentResolver {
         private AssignmentOutcome() {}
     }
 
-    // ─── AssignmentOutcome Factories ────────────────────────────────────────
+    // ─── AssignmentOutcome Factories (outer-class statics) ────────────────────
 
+    /**
+     * @description Creates outcome for a successful assignment.
+     */
     private static AssignmentOutcome outcomeAssigned(
         Id recordId,
         Integer retryCount,
@@ -48,6 +55,9 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates outcome when no candidates exist.
+     */
     private static AssignmentOutcome outcomeNoMatch(Integer candidateCount) {
         AssignmentOutcome o = new AssignmentOutcome();
         o.success = false;
@@ -59,6 +69,10 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates outcome when agent already owns a record
+     *              and Allow_Multiple__c is false.
+     */
     private static AssignmentOutcome outcomeAlreadyAssigned() {
         AssignmentOutcome o = new AssignmentOutcome();
         o.success = false;
@@ -70,6 +84,9 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates outcome when all lock retries are exhausted.
+     */
     private static AssignmentOutcome outcomeLockExhausted(
         Integer retryCount,
         Integer candidateCount
@@ -85,6 +102,9 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates outcome when DML update of the owner field fails.
+     */
     private static AssignmentOutcome outcomeDmlFailure(
         Id recordId,
         String errorMsg,
@@ -102,6 +122,17 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates a generic failure outcome for engine-level exceptions
+     *              that occur outside the normal assignment flow (e.g. malformed SOQL,
+     *              unexpected exception during condition binding or query building).
+     *
+     *              Public so RoutingEngine can create audit-loggable outcomes for
+     *              any bundle that throws an unexpected exception.
+     *
+     * @param errorMessage Description of the failure
+     * @return Failure outcome with status 'Failed'
+     */
     public static AssignmentOutcome outcomeError(String errorMessage) {
         AssignmentOutcome o = new AssignmentOutcome();
         o.success = false;
@@ -115,6 +146,15 @@ public with sharing class AssignmentResolver {
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
+    /**
+     * @description Resolves assignment for a single ConfigBundle: checks existing
+     *              assignments, locks a candidate, updates ownership.
+     *
+     * @param bundle      The routing config bundle
+     * @param candidates  Priority-sorted candidate records from CandidateSelector
+     * @param agentUserId The agent requesting work (pull model)
+     * @return AssignmentOutcome describing the result
+     */
     public static AssignmentOutcome resolve(
         ConfigBundle bundle,
         List<SObject> candidates,
@@ -246,6 +286,10 @@ public with sharing class AssignmentResolver {
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
+    /**
+     * @description Formats Database.Error list into a single human-readable string
+     *              for error messages and audit logging.
+     */
     private static String formatDmlErrors(List<Database.Error> errors) {
         if (errors == null || errors.isEmpty()) {
             return 'Unknown DML error.';

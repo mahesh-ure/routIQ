@@ -8,6 +8,15 @@
  *              • Field and object API names come from CMDT (admin-configured, trusted).
  *              • The caller executes the query with AccessLevel.USER_MODE for FLS enforcement.
  *
+ *              SOQL structure:
+ *                SELECT  {Id, ownerField, selectFields}
+ *                FROM    {objectApiName}
+ *                WHERE   {condition clauses AND-joined}
+ *                        [AND RecordType.DeveloperName IN :rtFilter]
+ *                        [AND Id = :recId]
+ *                ORDER BY {priority sort specs}
+ *                LIMIT   {candidateLimit}
+ *
  * @group Worker
  */
 public with sharing class DynamicQueryBuilder {
@@ -16,10 +25,23 @@ public with sharing class DynamicQueryBuilder {
 
     // ─── Public API ────────────────────────────────────────────────────────────
 
+    /**
+     * @description Builds a QuerySpec for all candidates matching a config's conditions.
+     * @param bundle  The routing configuration bundle
+     * @param bindMap Typed bind map from ConditionBinder.resolveAll()
+     * @return QuerySpec ready for Database.queryWithBinds()
+     */
     public static QuerySpec build(ConfigBundle bundle, Map<String, Object> bindMap) {
         return build(bundle, bindMap, null);
     }
 
+    /**
+     * @description Builds a QuerySpec, optionally scoped to a single record.
+     * @param bundle   The routing configuration bundle
+     * @param bindMap  Typed bind map from ConditionBinder.resolveAll()
+     * @param recordId Optional 15/18-char record ID to scope query to one record
+     * @return QuerySpec ready for Database.queryWithBinds()
+     */
     public static QuerySpec build(
         ConfigBundle bundle,
         Map<String, Object> bindMap,
@@ -63,6 +85,10 @@ public with sharing class DynamicQueryBuilder {
 
     // ─── SELECT ────────────────────────────────────────────────────────────────
 
+    /**
+     * @description Builds a deduplicated, order-preserving SELECT field list.
+     *              Always includes Id first, then ownerFieldApiName, then selectFields.
+     */
     private static String buildSelect(ConfigBundle bundle) {
         List<String> fields = new List<String>();
         Set<String> seen = new Set<String>();
@@ -82,6 +108,9 @@ public with sharing class DynamicQueryBuilder {
         return String.join(fields, ', ');
     }
 
+    /**
+     * @description Adds a field to the list if not already present (case-insensitive).
+     */
     private static void addField(List<String> fields, Set<String> seen, String field) {
         String lower = field.toLowerCase();
         if (!seen.contains(lower)) {
@@ -92,6 +121,10 @@ public with sharing class DynamicQueryBuilder {
 
     // ─── WHERE ─────────────────────────────────────────────────────────────────
 
+    /**
+     * @description Builds the WHERE clause by AND-joining condition clauses,
+     *              optional record-type filter, and optional single-record scope.
+     */
     private static String buildWhere(
         ConfigBundle bundle,
         Map<String, Object> binds,
@@ -105,11 +138,13 @@ public with sharing class DynamicQueryBuilder {
             clauses.add(buildConditionClause(cond, bindKey));
         }
 
+        // Record type filter
         if (!bundle.recordTypeDevNames.isEmpty()) {
             binds.put('rtFilter', bundle.recordTypeDevNames);
             clauses.add('RecordType.DeveloperName IN :rtFilter');
         }
 
+        // Single-record scope
         if (String.isNotBlank(recordId)) {
             binds.put('recId', recordId);
             clauses.add('Id = :recId');
@@ -118,6 +153,19 @@ public with sharing class DynamicQueryBuilder {
         return String.join(clauses, ' AND ');
     }
 
+    /**
+     * @description Translates one Routing_Condition__mdt into a SOQL clause fragment.
+     *
+     *              Operator mapping:
+     *              • IN / EQUALS        → field IN :bN          (list bind)
+     *              • NOT_IN / NOT_EQUALS → field NOT IN :bN     (list bind)
+     *              • INCLUDES           → field INCLUDES (:bN)  (multi-select picklist)
+     *              • EXCLUDES           → field EXCLUDES (:bN)  (multi-select picklist)
+     *              • LESS_THAN          → field < :bN           (scalar bind)
+     *              • GREATER_THAN       → field > :bN           (scalar bind)
+     *              • LESS_OR_EQUAL      → field <= :bN          (scalar bind)
+     *              • GREATER_OR_EQUAL   → field >= :bN          (scalar bind)
+     */
     private static String buildConditionClause(
         Routing_Condition__mdt cond,
         String bindKey
@@ -163,9 +211,17 @@ public with sharing class DynamicQueryBuilder {
 
     // ─── ORDER BY ──────────────────────────────────────────────────────────────
 
+    // Whitelisted SOQL keywords for ORDER BY — defense-in-depth against CMDT misconfiguration
     private static final Set<String> VALID_DIRECTIONS = new Set<String>{ 'ASC', 'DESC' };
     private static final Set<String> VALID_NULL_HANDLING = new Set<String>{ 'NULLS FIRST', 'NULLS LAST' };
 
+    /**
+     * @description Builds the ORDER BY clause from Routing_Priority__mdt records.
+     *              Each priority contributes: FieldName ASC|DESC NULLS FIRST|LAST
+     *              Priorities are already sorted by Sort_Order__c in ConfigBundle.
+     *              Sort direction and null handling are whitelist-validated before
+     *              concatenation to prevent SOQL keyword injection.
+     */
     private static String buildOrderBy(ConfigBundle bundle) {
         if (bundle.priorities == null || bundle.priorities.isEmpty()) {
             return '';
