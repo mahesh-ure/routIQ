@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Indexed__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>false</defaultValue>
+    <description>Informational. Populated by Setup Wizard via Schema.DescribeFieldResult at config time. Used to warn admins about unindexed fields that may cause slow queries on large data volumes.</description>
+    <label>Is Indexed</label>
+    <type>Checkbox</type>
+</CustomField>

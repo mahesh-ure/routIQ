@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Query_Bind_Snapshot__c</fullName>
+    <description>JSON snapshot of bind variable names and list sizes (not values — no PII). For debugging. e.g. {"b0":["New","Escalated"],"b1":3}</description>
+    <externalId>false</externalId>
+    <label>Query Bind Snapshot</label>
+    <length>32768</length>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

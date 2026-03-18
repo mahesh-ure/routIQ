@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Operator__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>SOQL operator for this condition. = and != are accepted for backward compatibility but internally converted to IN / NOT IN with a single-element list.</description>
+    <label>Operator</label>
+    <required>true</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>IN</fullName>
+                <default>true</default>
+                <label>IN</label>
+            </value>
+            <value>
+                <fullName>NOT IN</fullName>
+                <default>false</default>
+                <label>NOT IN</label>
+            </value>
+            <value>
+                <fullName>INCLUDES</fullName>
+                <default>false</default>
+                <label>INCLUDES</label>
+            </value>
+            <value>
+                <fullName>EXCLUDES</fullName>
+                <default>false</default>
+                <label>EXCLUDES</label>
+            </value>
+            <value>
+                <fullName>EQUALS</fullName>
+                <default>false</default>
+                <label>=</label>
+            </value>
+            <value>
+                <fullName>NOT_EQUALS</fullName>
+                <default>false</default>
+                <label>!=</label>
+            </value>
+            <value>
+                <fullName>LESS_THAN</fullName>
+                <default>false</default>
+                <label>&lt;</label>
+            </value>
+            <value>
+                <fullName>GREATER_THAN</fullName>
+                <default>false</default>
+                <label>&gt;</label>
+            </value>
+            <value>
+                <fullName>LESS_OR_EQUAL</fullName>
+                <default>false</default>
+                <label>&lt;=</label>
+            </value>
+            <value>
+                <fullName>GREATER_OR_EQUAL</fullName>
+                <default>false</default>
+                <label>&gt;=</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

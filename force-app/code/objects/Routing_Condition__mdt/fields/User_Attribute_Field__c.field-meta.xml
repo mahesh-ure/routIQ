@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>User_Attribute_Field__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>API name of the User field to read at runtime. Required when Value_Source__c is USER_ATTRIBUTE. e.g. Region_License__c. Multi-select User fields are split on semicolon.</description>
+    <label>User Attribute Field</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

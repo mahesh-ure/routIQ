@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Owner_Field_API_Name__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>The field the engine writes the assignee into. Typically OwnerId. Supports any Lookup(User) or OwnerId field.</description>
+    <label>Owner Field API Name</label>
+    <length>255</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

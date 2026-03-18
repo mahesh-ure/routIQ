@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>ORDER BY specification per Routing Config. Replaces all hardcoded sort logic. The engine builds ORDER BY dynamically from these records.</description>
+    <label>Routing Priority</label>
+    <pluralLabel>Routing Priorities</pluralLabel>
+    <visibility>Public</visibility>
+</CustomObject>
