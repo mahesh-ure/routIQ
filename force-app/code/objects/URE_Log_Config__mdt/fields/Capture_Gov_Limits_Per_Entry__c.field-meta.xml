@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Capture_Gov_Limits_Per_Entry__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>When true, every log entry captures a full URE_GovLimits compact string. Use for deep debugging only — adds CPU per entry.</description>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <label>Capture Gov Limits Per Entry</label>
+    <type>Checkbox</type>
+</CustomField>

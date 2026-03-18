@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Entry_Point__c</fullName>
+    <description>Which integration surface triggered the routing transaction.</description>
+    <externalId>false</externalId>
+    <label>Entry Point</label>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>InvocableMethod</fullName>
+                <default>false</default>
+                <label>InvocableMethod</label>
+            </value>
+            <value>
+                <fullName>REST</fullName>
+                <default>false</default>
+                <label>REST</label>
+            </value>
+            <value>
+                <fullName>LWC</fullName>
+                <default>false</default>
+                <label>LWC</label>
+            </value>
+            <value>
+                <fullName>GlobalAction</fullName>
+                <default>false</default>
+                <label>GlobalAction</label>
+            </value>
+            <value>
+                <fullName>Test</fullName>
+                <default>false</default>
+                <label>Test</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

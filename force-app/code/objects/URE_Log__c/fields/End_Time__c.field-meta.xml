@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>End_Time__c</fullName>
+    <description>Transaction end timestamp from System.currentTimeMillis() at flush().</description>
+    <externalId>false</externalId>
+    <label>End Time</label>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>DateTime</type>
+</CustomField>
