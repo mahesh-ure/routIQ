@@ -132,6 +132,28 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates a generic failure outcome for engine-level exceptions
+     *              that occur outside the normal assignment flow (e.g. malformed SOQL,
+     *              unexpected exception during condition binding or query building).
+     *
+     *              Public so RoutingEngine can create audit-loggable outcomes for
+     *              any bundle that throws an unexpected exception.
+     *
+     * @param errorMessage Description of the failure
+     * @return Failure outcome with status 'Failed'
+     */
+    public static AssignmentOutcome outcomeError(String errorMessage) {
+        AssignmentOutcome o = new AssignmentOutcome();
+        o.success = false;
+        o.lockContention = false;
+        o.retryCount = 0;
+        o.candidateCount = 0;
+        o.status = 'Failed';
+        o.errorMessage = errorMessage;
+        return o;
+    }
+
     // ─── Public API ───────────────────────────────────────────────────────────
 
     /**
