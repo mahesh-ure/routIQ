@@ -27,6 +27,12 @@ global with sharing class RoutingResult {
     @InvocableVariable(label='Error Message' description='Blank on success. Describes the failure reason.' required=false)
     global String errorMessage;
 
+    @InvocableVariable(label='Object API Name' description='API name of the routed SObject (e.g. Case, Loan_Application__c)' required=false)
+    global String objectApiName;
+
+    @InvocableVariable(label='Record Name' description='Display name of the routed record (e.g. CaseNumber for Case, Name for custom objects)' required=false)
+    global String recordName;
+
     @InvocableVariable(label='Entry Point' description='Integration surface that initiated routing (InvocableMethod, REST, LWC, GlobalAction)' required=false)
     global String entryPoint;
 

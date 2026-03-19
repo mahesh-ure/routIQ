@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+
+    <!-- ── Routing Console: Button & States ──────────────────────────── -->
+
+    <labels>
+        <fullName>URE_NextBestAction</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Next Best Action button label</shortDescription>
+        <value>Next Best Action</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_Routing</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Button label while routing in progress</shortDescription>
+        <value>Routing...</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_Assigned</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Label shown above the assigned record link</shortDescription>
+        <value>Assigned</value>
+    </labels>
+
+    <!-- ── Routing Console: Toast Messages ───────────────────────────── -->
+
+    <labels>
+        <fullName>URE_RecordAssigned</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Success toast title after record assignment</shortDescription>
+        <value>Record Assigned</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_RoutingError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error toast title for routing failures</shortDescription>
+        <value>Routing Error</value>
+    </labels>
+
+    <!-- ── Routing Console: Error Messages ───────────────────────────── -->
+
+    <labels>
+        <fullName>URE_NoRecordsAvailable</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Message when no matching candidates found</shortDescription>
+        <value>No records available.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_UnexpectedError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback message for unexpected errors</shortDescription>
+        <value>An unexpected error occurred.</value>
+    </labels>
+
+    <!-- ── Routing Console: Accessibility ─────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_FindingNextRecord</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text during routing</shortDescription>
+        <value>Finding next record</value>
+    </labels>
+
+</CustomLabels>

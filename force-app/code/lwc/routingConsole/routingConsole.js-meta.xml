@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Routing Console</masterLabel>
+    <description>Agent-facing Get Next button for routIQ Universal Routing Engine. Human-initiated only — never fires on load. Shows last assigned record name and link.</description>
+    <targets>
+        <target>lightning__UtilityBar</target>
+    </targets>
+</LightningComponentBundle>
