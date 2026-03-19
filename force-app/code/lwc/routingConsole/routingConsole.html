@@ -1,0 +1,55 @@
+<template>
+    <div class="slds-p-around_small">
+
+        <!-- ── Next Best Action Button ─────────────────────────────── -->
+        <lightning-button
+            label={buttonLabel}
+            variant="brand"
+            icon-name="utility:forward"
+            onclick={handleGetNext}
+            disabled={isLoading}>
+        </lightning-button>
+
+        <!-- ── Loading Spinner ─────────────────────────────────────── -->
+        <template lwc:if={isLoading}>
+            <div class="slds-m-top_small slds-align_absolute-center">
+                <lightning-spinner
+                    alternative-text={label.findingNext}
+                    size="small">
+                </lightning-spinner>
+            </div>
+        </template>
+
+        <!-- ── Success: Record Name + Link ─────────────────────────── -->
+        <template lwc:if={isSuccess}>
+            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                <div class="slds-m-right_x-small">
+                    <lightning-icon
+                        icon-name="utility:success"
+                        size="x-small"
+                        variant="success">
+                    </lightning-icon>
+                </div>
+                <div>
+                    <p class="slds-text-body_small slds-text-color_weak">{label.assigned}</p>
+                    <a href={recordUrl} onclick={handleNavigate}>{displayName}</a>
+                </div>
+            </div>
+        </template>
+
+        <!-- ── Failure / No Match ──────────────────────────────────── -->
+        <template lwc:if={isFailure}>
+            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                <div class="slds-m-right_x-small">
+                    <lightning-icon
+                        icon-name="utility:warning"
+                        size="x-small"
+                        variant="warning">
+                    </lightning-icon>
+                </div>
+                <p class="slds-text-body_small">{errorMessage}</p>
+            </div>
+        </template>
+
+    </div>
+</template>

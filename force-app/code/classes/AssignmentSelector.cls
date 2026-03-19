@@ -22,6 +22,9 @@ public with sharing class AssignmentSelector {
     @TestVisible
     private static List<SObject> mockOwnedRecords;
 
+    @TestVisible
+    private static String mockRecordName;
+
     // ─── Public API ────────────────────────────────────────────────────────────
 
     /**
@@ -104,5 +107,68 @@ public with sharing class AssignmentSelector {
         return Database.queryWithBinds(
             soql, binds, AccessLevel.USER_MODE
         );
+    }
+
+    /**
+     * @description Fetches the display name of a record using the SObject's name field
+     *              determined via Schema describe (isNameField). Handles all SObject types:
+     *              Account→Name, Case→CaseNumber, custom objects→Name, etc.
+     *
+     *              Non-fatal — returns null on any failure so the UI can fall back to
+     *              displaying the record Id. Uses AccessLevel.USER_MODE for FLS enforcement.
+     *
+     *              Cost: 1 describe (platform-cached) + 1 SOQL.
+     *
+     * @param objectApiName SObject API name (from ConfigBundle, trusted CMDT source)
+     * @param recordId      Id of the assigned record
+     * @return Display name string, or null if unavailable
+     */
+    public static String queryRecordName(String objectApiName, Id recordId) {
+        if (Test.isRunningTest() && mockRecordName != null) {
+            return mockRecordName;
+        }
+
+        if (String.isBlank(objectApiName) || recordId == null) {
+            return null;
+        }
+
+        try {
+            Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
+            if (sot == null) {
+                return null;
+            }
+
+            // Find the name field via describe — isNameField() returns true for
+            // the object's display name (Name, CaseNumber, SolutionName, etc.)
+            String nameField = null;
+            for (Schema.SObjectField field : sot.getDescribe().fields.getMap().values()) {
+                if (field.getDescribe().isNameField()) {
+                    nameField = field.getDescribe().getName();
+                    break;
+                }
+            }
+
+            if (nameField == null) {
+                return null;
+            }
+
+            // Field and object names from describe/CMDT — safe for concatenation
+            String soql = 'SELECT ' + nameField
+                + ' FROM ' + objectApiName
+                + ' WHERE Id = :recordId LIMIT 1';
+
+            List<SObject> records = Database.queryWithBinds(
+                soql,
+                new Map<String, Object>{ 'recordId' => recordId },
+                AccessLevel.USER_MODE
+            );
+
+            return records.isEmpty()
+                ? null
+                : String.valueOf(records[0].get(nameField));
+        } catch (Exception ex) {
+            // Non-fatal — UI falls back to recordId display
+            return null;
+        }
     }
 }

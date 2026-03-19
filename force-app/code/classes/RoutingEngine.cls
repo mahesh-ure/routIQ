@@ -157,7 +157,8 @@ public with sharing class RoutingEngine {
                 if (processed.outcome.success) {
                     successIndex = i;
                     finalResult = buildSuccessResult(
-                        processed.outcome, agentUserId, entryPoint
+                        processed.outcome, agentUserId, entryPoint,
+                        bundle.objectApiName
                     );
 
                     URE_Logger.info('Assignment succeeded for "'
@@ -206,6 +207,13 @@ public with sharing class RoutingEngine {
 
         // ─── Phase 7: Return Result ──────────────────────────────────────
         if (finalResult != null) {
+            // Fetch display name for UI (1 SOQL, only on success path)
+            if (finalResult.success && String.isNotBlank(finalResult.recordId)) {
+                finalResult.recordName = AssignmentSelector.queryRecordName(
+                    finalResult.objectApiName,
+                    Id.valueOf(finalResult.recordId)
+                );
+            }
             return finalResult;
         }
 
@@ -301,7 +309,8 @@ public with sharing class RoutingEngine {
     private static RoutingResult buildSuccessResult(
         AssignmentResolver.AssignmentOutcome outcome,
         Id agentUserId,
-        String entryPoint
+        String entryPoint,
+        String objectApiName
     ) {
         RoutingResult rr = RoutingResult.success(
             String.valueOf(outcome.recordId),
@@ -310,6 +319,7 @@ public with sharing class RoutingEngine {
             outcome.retryCount
         );
         rr.entryPoint = entryPoint;
+        rr.objectApiName = objectApiName;
         return rr;
     }
 
