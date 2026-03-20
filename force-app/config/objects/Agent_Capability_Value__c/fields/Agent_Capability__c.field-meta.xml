@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agent_Capability__c</fullName>
+    <description>Which capability dimension this value belongs to. References an Agent_Capability__mdt record (e.g. Province_Capability, Language_Capability).</description>
+    <externalId>false</externalId>
+    <label>Agent Capability</label>
+    <length>255</length>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

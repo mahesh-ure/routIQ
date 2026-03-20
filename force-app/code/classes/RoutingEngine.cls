@@ -6,20 +6,26 @@
  *              Every operation is delegated:
  *                ConfigLoader      → load active configs        (0 SOQL — CMDT cached)
  *                RuleEvaluator     → filter applicable configs  (0 SOQL — in-memory)
- *                UserAttributeSelector → get agent fields       (0–1 SOQL — once for all bundles)
+ *                AgentCapabilitySelector → pre-load agents+caps (1–2 SOQL — cached)
  *                ConditionBinder   → resolve bind variables     (0 SOQL — in-memory)
  *                DynamicQueryBuilder → assemble SOQL            (0 SOQL — string ops)
  *                CandidateSelector → execute candidate query    (1 SOQL per bundle)
- *                AssignmentResolver → lock + assign             (1–N SOQL + 0–1 DML per bundle)
+ *                AgentMatcher      → evaluate agent eligibility (0 SOQL — cached data)
+ *                AssignmentResolver → lock + assign             (1–N SOQL + 1–2 DML)
  *                AuditLogger       → insert Routing_Log__c     (1 DML — bulk flush)
  *
- *              Pull model: agent requests → engine finds best candidate → assigns to agent.
- *              First successful assignment wins — engine stops iterating bundles.
- *              All outcomes (success, failure, no-match) are audit-logged.
+ *              v2 changes:
+ *              • UserAttributeSelector removed — replaced by AgentCapabilitySelector
+ *              • AgentMatcher phase added between candidate query and assignment
+ *              • CapabilityMismatchException caught per-bundle and audit-logged
+ *              • ConditionBinder simplified to STATIC-only (no userAttributes param)
+ *
+ *              Pull model: agent requests → engine finds best candidate → validates
+ *              agent eligibility → assigns to agent. First successful assignment wins.
  *
  *              Governor budget per execution (typical single-config case):
- *                SOQL: 0 (CMDT) + 1 (user attrs) + 1 (candidates) + 1–5 (lock) = 3–7
- *                DML:  1 (assignment update) + 1 (audit flush) = 2
+ *                SOQL: 0 (CMDT) + 1 (agents) + 1 (caps) + 1 (candidates) + 1 (lock) = 4
+ *                DML:  1 (assignment) + 1 (agent load) + 1 (audit flush) = 3
  *
  * @group Orchestrator
  */
@@ -99,8 +105,7 @@ public with sharing class RoutingEngine {
             return RoutingResult.noMatch();
         }
 
-        URE_Logger.info('Applicable configs: ' + evalResult.applicableBundles.size()
-                + ' | userFields: ' + evalResult.requiredUserFields.size())
+        URE_Logger.info('Applicable configs: ' + evalResult.applicableBundles.size())
             .category(URE_Logger.Category.CONFIG)
             .inClass(CLS).inMethod('execute')
             .log();
@@ -112,18 +117,14 @@ public with sharing class RoutingEngine {
             .inClass(CLS).inMethod('execute')
             .log();
 
-        // ─── Phase 4: Pre-fetch User Attributes (0–1 SOQL) ───────────────
-        Map<String, Object> userAttributes = new Map<String, Object>();
-        if (!evalResult.requiredUserFields.isEmpty()) {
-            userAttributes = UserAttributeSelector.getAttributes(
-                agentUserId,
-                evalResult.requiredUserFields
-            );
-        }
+        // ─── Phase 4: Pre-load Agent Data (1–2 SOQL, transaction-cached) ─
+        // Eagerly load agents and capabilities ONCE for all bundles.
+        // AgentCapabilitySelector caches results — subsequent calls are free.
+        AgentCapabilitySelector.getActiveAgentsByUserId();
+        AgentCapabilitySelector.getAllCapabilityValues();
 
-        // ── PERF snapshot: after user attribute query ───────────────────
-        URE_Logger.perf('Phase 4 complete: user attributes fetched'
-                + ' | fieldCount=' + userAttributes.size())
+        // ── PERF snapshot: after agent data load ────────────────────────
+        URE_Logger.perf('Phase 4 complete: agent data pre-loaded (cached)')
             .category(URE_Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
@@ -149,7 +150,7 @@ public with sharing class RoutingEngine {
                     .log();
 
                 ProcessOutcome processed = processBundle(
-                    bundle, request, agentUserId, entryPoint, userAttributes
+                    bundle, request, agentUserId, entryPoint
                 );
 
                 auditEntries.add(processed.auditEntry);
@@ -235,12 +236,12 @@ public with sharing class RoutingEngine {
     // ─── Bundle Processing ────────────────────────────────────────────────────
 
     /**
-     * @description Processes a single ConfigBundle through the full pipeline:
-     *              bind → build → query → assign → audit entry.
+     * @description Processes a single ConfigBundle through the full v2 pipeline:
+     *              bind → build → query → agent match → assign → audit entry.
      *
-     *              Catches exceptions per-bundle so one bad config does not kill the
-     *              entire routing transaction. Failed bundles produce a failure
-     *              audit entry and the engine continues to the next bundle.
+     *              v2: AgentMatcher evaluation added between candidate query and
+     *              assignment. CapabilityMismatchException is caught and converted
+     *              to an audit-loggable outcome — the engine continues to the next bundle.
      *
      * @return ProcessOutcome containing the assignment result and buffered audit entry
      */
@@ -248,17 +249,14 @@ public with sharing class RoutingEngine {
         ConfigBundle bundle,
         RoutingRequest request,
         Id agentUserId,
-        String entryPoint,
-        Map<String, Object> userAttributes
+        String entryPoint
     ) {
         ProcessOutcome result = new ProcessOutcome();
 
         try {
-            // ── Resolve bind variables (0 SOQL) ──────────────────────────
+            // ── Resolve bind variables (0 SOQL) — v2: STATIC only ───────
             Map<String, Object> bindMap = ConditionBinder.resolveAll(
-                bundle.conditions,
-                agentUserId,
-                userAttributes
+                bundle.conditions
             );
 
             // ── Build SOQL query (0 SOQL) ────────────────────────────────
@@ -271,7 +269,32 @@ public with sharing class RoutingEngine {
             // ── Execute candidate query (1 SOQL) ─────────────────────────
             List<SObject> candidates = CandidateSelector.query(spec);
 
-            // ── Resolve assignment (1–N SOQL lock + 0–1 DML update) ──────
+            // ── v2: Agent capability match (0 SOQL — cached data) ────────
+            // Evaluate BEFORE assignment so capacity/capability gates
+            // fire before we spend SOQL on lock attempts.
+            if (!candidates.isEmpty() && !bundle.matchConditions.isEmpty()) {
+                SObject topCandidate = candidates[0];
+                AgentMatcher.MatchResult matchResult = AgentMatcher.evaluate(
+                    topCandidate,
+                    bundle.matchConditions,
+                    agentUserId,
+                    bundle.developerName
+                );
+
+                if (!matchResult.matched) {
+                    // This path shouldn't be reached (AgentMatcher throws on
+                    // mandatory mismatch), but defense-in-depth:
+                    result.outcome = AssignmentResolver.outcomeCapabilityMismatch(
+                        'Agent does not match required capabilities.'
+                    );
+                    result.auditEntry = AuditLogger.createEntry(
+                        result.outcome, bundle, agentUserId, entryPoint, spec
+                    );
+                    return result;
+                }
+            }
+
+            // ── Resolve assignment (1–N SOQL lock + 1–2 DML) ─────────────
             AssignmentResolver.AssignmentOutcome outcome =
                 AssignmentResolver.resolve(bundle, candidates, agentUserId);
 
@@ -279,6 +302,34 @@ public with sharing class RoutingEngine {
             result.outcome = outcome;
             result.auditEntry = AuditLogger.createEntry(
                 outcome, bundle, agentUserId, entryPoint, spec
+            );
+
+        } catch (CapabilityMismatchException cmEx) {
+            // ── v2: Capability or capacity failure — audit and continue ──
+            URE_Logger.warn('Capability/capacity gate failed for config "'
+                    + bundle.developerName + '" | ' + cmEx.getMessage())
+                .category(URE_Logger.Category.ENGINE)
+                .inClass(CLS).inMethod('processBundle')
+                .forConfig(bundle.developerName)
+                .forObject(bundle.objectApiName)
+                .log();
+
+            // Determine specific status based on message content
+            String status = cmEx.getMessage().contains('maximum open items')
+                ? 'Capacity_Exceeded'
+                : 'Capability_Mismatch';
+
+            if (status == 'Capacity_Exceeded') {
+                result.outcome = AssignmentResolver.outcomeCapacityExceeded(
+                    cmEx.getMessage()
+                );
+            } else {
+                result.outcome = AssignmentResolver.outcomeCapabilityMismatch(
+                    cmEx.getMessage()
+                );
+            }
+            result.auditEntry = AuditLogger.createEntry(
+                result.outcome, bundle, agentUserId, entryPoint, null
             );
 
         } catch (Exception ex) {
@@ -304,7 +355,6 @@ public with sharing class RoutingEngine {
 
     /**
      * @description Builds a RoutingResult from a successful AssignmentOutcome.
-     *              The routingLogId is attached later after AuditLogger.flush().
      */
     private static RoutingResult buildSuccessResult(
         AssignmentResolver.AssignmentOutcome outcome,
@@ -324,9 +374,7 @@ public with sharing class RoutingEngine {
     }
 
     /**
-     * @description Builds an AssignmentOutcome from an unexpected exception so
-     *              AuditLogger can record it. Delegates to AssignmentResolver's
-     *              public outcomeError() factory.
+     * @description Builds an AssignmentOutcome from an unexpected exception.
      */
     private static AssignmentResolver.AssignmentOutcome buildExceptionOutcome(
         Exception ex

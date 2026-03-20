@@ -1,14 +1,18 @@
 /**
  * @description Value object that holds a single routing configuration with its associated
- *              conditions and priorities. Created by ConfigLoader — one bundle per active
- *              Routing_Config__mdt record.
+ *              conditions, priorities, and v2 match conditions. Created by ConfigLoader —
+ *              one bundle per active Routing_Config__mdt record.
  *
  *              Implements Comparable to allow List<ConfigBundle>.sort() by Priority_Weight__c
  *              (lower weight = higher priority = earlier in list).
  *
  *              Pre-parses comma-delimited config fields once during construction so
- *              downstream consumers (DynamicQueryBuilder, RoutingEngine, AssignmentResolver)
- *              never repeat parsing logic.
+ *              downstream consumers (DynamicQueryBuilder, RoutingEngine, AssignmentResolver,
+ *              AgentMatcher) never repeat parsing logic.
+ *
+ *              v2 additions:
+ *              • matchConditions — Agent_Match_Condition__mdt list for AgentMatcher
+ *              • maxRetryAttempts — admin-configurable lock retry count (default 1)
  *
  * @group Worker
  */
@@ -19,6 +23,7 @@ public with sharing class ConfigBundle implements Comparable {
     public Routing_Config__mdt config;
     public List<Routing_Condition__mdt> conditions;
     public List<Routing_Priority__mdt> priorities;
+    public List<Agent_Match_Condition__mdt> matchConditions;
 
     // ─── Pre-parsed convenience values ───────────────────────────────────────
 
@@ -31,6 +36,7 @@ public with sharing class ConfigBundle implements Comparable {
     public List<String> closedStatusValues;
     public List<String> recordTypeDevNames;
     public List<String> selectFields;
+    public Integer maxRetryAttempts;
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
@@ -38,18 +44,24 @@ public with sharing class ConfigBundle implements Comparable {
      * @description Builds a bundle from a config and its child records. Sorts conditions
      *              and priorities by Sort_Order__c ascending. Pre-parses comma-delimited
      *              config fields.
-     * @param config     The parent Routing Config CMDT record
-     * @param conditions Active conditions for this config (filtered upstream by ConfigLoader)
-     * @param priorities Priority sort specs for this config
+     *
+     * @param config          The parent Routing Config CMDT record
+     * @param conditions      Active conditions for this config (filtered upstream)
+     * @param priorities      Priority sort specs for this config
+     * @param matchConditions v2: Agent Match Conditions for this config (may be empty)
      */
     public ConfigBundle(
         Routing_Config__mdt config,
         List<Routing_Condition__mdt> conditions,
-        List<Routing_Priority__mdt> priorities
+        List<Routing_Priority__mdt> priorities,
+        List<Agent_Match_Condition__mdt> matchConditions
     ) {
         this.config = config;
         this.conditions = sortConditions(conditions);
         this.priorities = sortPriorities(priorities);
+        this.matchConditions = (matchConditions != null)
+            ? matchConditions
+            : new List<Agent_Match_Condition__mdt>();
 
         this.developerName = config.DeveloperName;
         this.objectApiName = config.Object_API_Name__c;
@@ -62,6 +74,21 @@ public with sharing class ConfigBundle implements Comparable {
         this.closedStatusValues = parseCommaDelimited(config.Closed_Status_Values__c);
         this.recordTypeDevNames = parseCommaDelimited(config.Record_Type_Dev_Name__c);
         this.selectFields = parseCommaDelimited(config.Select_Fields__c);
+        this.maxRetryAttempts = (config.Max_Retry_Attempts__c != null)
+            ? config.Max_Retry_Attempts__c.intValue()
+            : 1;
+    }
+
+    /**
+     * @description Backward-compatible constructor for existing code and tests.
+     *              Creates a bundle with an empty matchConditions list.
+     */
+    public ConfigBundle(
+        Routing_Config__mdt config,
+        List<Routing_Condition__mdt> conditions,
+        List<Routing_Priority__mdt> priorities
+    ) {
+        this(config, conditions, priorities, new List<Agent_Match_Condition__mdt>());
     }
 
     // ─── Comparable — sort bundles by Priority_Weight__c ascending ────────────

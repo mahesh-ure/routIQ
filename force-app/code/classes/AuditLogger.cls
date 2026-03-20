@@ -5,11 +5,19 @@
  *              This is distinct from URE_Logger (diagnostic observability that CAN be
  *              turned off via URE_Log_Config__mdt).
  *
+ *              v2 changes:
+ *              • Status__c uses consolidated uppercase values (ASSIGNED, NO_MATCH,
+ *                CAPABILITY_MISMATCH, CAPACITY_EXCEEDED, LOCK_CONTENTION,
+ *                RETRY_EXHAUSTED, FAILED)
+ *              • Outcome__c field removed — single Status__c is authoritative
+ *
  *              Governor cost: 1 DML per flush (bulk insert). Zero SOQL.
  *
  * @group Worker
  */
 public with sharing class AuditLogger {
+
+    private static final String CLS = 'AuditLogger';
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
@@ -81,6 +89,13 @@ public with sharing class AuditLogger {
         return new AuditEntry(log);
     }
 
+    /**
+     * @description Bulk-inserts all buffered audit entries in a single DML operation.
+     *              Returns the list of inserted Routing_Log__c Ids (null for failures).
+     *
+     * @param entries AuditEntry list collected during bundle processing
+     * @return List of Routing_Log__c Ids (same order as input)
+     */
     public static List<Id> flush(List<AuditEntry> entries) {
         List<Id> logIds = new List<Id>();
 
@@ -136,12 +151,6 @@ public with sharing class AuditLogger {
     /**
      * @description Builds a PII-safe JSON snapshot of bind variable metadata.
      *              Stores bind KEY names and the SIZE of each list — never raw values.
-     *
-     *              Example output:
-     *              {"b0":{"type":"List<String>","size":2},"b1":{"type":"List<Decimal>","size":1},"rtFilter":{"type":"List<String>","size":3}}
-     *
-     *              This satisfies AppExchange security review: no customer data in
-     *              Routing_Log__c records. Admins can still diagnose query shape issues.
      *
      * @param spec QuerySpec from DynamicQueryBuilder (may be null)
      * @return JSON string or null if no spec/binds exist

@@ -1,4 +1,4 @@
-z/**
+/**
  * @description Resolves Routing_Condition__mdt records into a typed bind-variable map
  *              for use with Database.queryWithBinds().
  *
@@ -6,10 +6,12 @@ z/**
  *              • A typed List (for set operators: IN, NOT IN, INCLUDES, EXCLUDES, EQUALS, NOT_EQUALS)
  *              • A typed scalar (for comparison operators: LESS_THAN, GREATER_THAN, etc.)
  *
- *              Value resolution depends on Value_Source__c:
- *              • STATIC  — parses comma-delimited Values__c text field
- *              • USER_ATTRIBUTE — reads from the pre-queried userAttributes map,
- *                splits multi-select picklist values on semicolons
+ *              v2 change: USER_ATTRIBUTE value source removed entirely. All conditions
+ *              are now STATIC only. Agent-specific filtering is handled by AgentMatcher
+ *              using the capability-matching model.
+ *
+ *              Value parsing supports both comma and semicolon delimiters for consistency
+ *              with Agent_Capability_Value__c.Values__c parsing.
  *
  *              Type casting is driven by Value_Type__c (String, Number, Boolean, Date, DateTime).
  *              Unparseable values are silently skipped — never throws on bad admin data.
@@ -31,15 +33,14 @@ public with sharing class ConditionBinder {
      *              Each value is typed to match Value_Type__c so Database.queryWithBinds()
      *              generates correct SOQL literals.
      *
-     * @param conditions     Sorted condition list from ConfigBundle
-     * @param agentUserId    Id of the requesting agent (reserved for future attribute lookup)
-     * @param userAttributes Pre-queried map of User field API name → field value
+     *              v2: Simplified signature — userAttributes parameter removed.
+     *              All conditions are STATIC source only.
+     *
+     * @param conditions Sorted condition list from ConfigBundle
      * @return Bind map ready for Database.queryWithBinds()
      */
     public static Map<String, Object> resolveAll(
-        List<Routing_Condition__mdt> conditions,
-        Id agentUserId,
-        Map<String, Object> userAttributes
+        List<Routing_Condition__mdt> conditions
     ) {
         Map<String, Object> bindMap = new Map<String, Object>();
 
@@ -55,13 +56,12 @@ public with sharing class ConditionBinder {
             Routing_Condition__mdt cond = conditions[i];
             String bindKey = 'b' + i;
 
-            // Step 1 — Resolve raw string values from the configured source
-            List<String> rawValues = resolveRawValues(cond, userAttributes);
+            // Step 1 — Parse STATIC values (comma and semicolon delimited)
+            List<String> rawValues = parseDelimited(cond.Values__c);
 
             URE_Logger.debug('Condition b' + i
                     + ' | field=' + cond.Field_API_Name__c
                     + ' | op=' + cond.Operator__c
-                    + ' | source=' + cond.Value_Source__c
                     + ' | type=' + cond.Value_Type__c
                     + ' | rawCount=' + rawValues.size())
                 .category(URE_Logger.Category.CONDITION_BIND)
@@ -89,81 +89,25 @@ public with sharing class ConditionBinder {
         return bindMap;
     }
 
-    // ─── Value Resolution ──────────────────────────────────────────────────────
+    // ─── Value Parsing ──────────────────────────────────────────────────────
 
     /**
-     * @description Routes to the correct value source and returns raw string values.
+     * @description Splits a comma-and-semicolon-delimited string into trimmed,
+     *              non-blank values. Supports both separators for consistency with
+     *              Agent_Capability_Value__c parsing.
      */
-    private static List<String> resolveRawValues(
-        Routing_Condition__mdt cond,
-        Map<String, Object> userAttributes
-    ) {
-        if (cond.Value_Source__c == 'USER_ATTRIBUTE') {
-            return resolveUserAttribute(cond, userAttributes);
-        }
-        // Default: STATIC
-        return parseCommaDelimited(cond.Values__c);
-    }
-
-    /**
-     * @description Splits a comma-delimited string into trimmed, non-blank values.
-     */
-    private static List<String> parseCommaDelimited(String value) {
+    @TestVisible
+    private static List<String> parseDelimited(String value) {
         List<String> result = new List<String>();
         if (String.isBlank(value)) {
             return result;
         }
-        for (String item : value.split(',')) {
+        for (String item : value.split('[,;]')) {
             String trimmed = item.trim();
             if (String.isNotBlank(trimmed)) {
                 result.add(trimmed);
             }
         }
-        return result;
-    }
-
-    /**
-     * @description Resolves a value from the pre-queried user attributes map.
-     *              Multi-select picklist values (semicolon-delimited) are split
-     *              into individual entries.
-     *
-     *              Returns empty list when the field is null or missing — this
-     *              yields zero matches in an IN clause, which is the correct
-     *              behavior (user lacks the required attribute).
-     */
-    private static List<String> resolveUserAttribute(
-        Routing_Condition__mdt cond,
-        Map<String, Object> userAttributes
-    ) {
-        List<String> result = new List<String>();
-
-        if (userAttributes == null || String.isBlank(cond.User_Attribute_Field__c)) {
-            URE_Logger.warn('USER_ATTRIBUTE condition has no attributes map or field name'
-                    + ' | field=' + cond.User_Attribute_Field__c)
-                .category(URE_Logger.Category.CONDITION_BIND)
-                .inClass(CLS).inMethod('resolveUserAttribute')
-                .log();
-            return result;
-        }
-
-        Object fieldValue = userAttributes.get(cond.User_Attribute_Field__c);
-        if (fieldValue == null) {
-            URE_Logger.debug('User attribute is null for field='
-                    + cond.User_Attribute_Field__c + ' — will produce empty bind list')
-                .category(URE_Logger.Category.CONDITION_BIND)
-                .inClass(CLS).inMethod('resolveUserAttribute')
-                .log();
-            return result;
-        }
-
-        String stringValue = String.valueOf(fieldValue);
-        for (String item : stringValue.split(';')) {
-            String trimmed = item.trim();
-            if (String.isNotBlank(trimmed)) {
-                result.add(trimmed);
-            }
-        }
-
         return result;
     }
 
