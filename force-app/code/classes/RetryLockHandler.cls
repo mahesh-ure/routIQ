@@ -119,10 +119,10 @@ public with sharing class RetryLockHandler {
                 );
 
                 if (locked == null) {
-                    URE_Logger.warn('Record vanished before lock | object='
+                    Logger.warn('Record vanished before lock | object='
                             + objectApiName + ' | Id=' + recordId
                             + ' | attempt=' + attempts)
-                        .category(URE_Logger.Category.LOCK)
+                        .category(Logger.Category.LOCK)
                         .inClass(CLS).inMethod('attemptLock')
                         .forObject(objectApiName)
                         .forRecord(recordId)
@@ -131,9 +131,9 @@ public with sharing class RetryLockHandler {
                 }
 
                 if (attempts > 1) {
-                    URE_Logger.info('Lock acquired after ' + attempts + ' attempts'
+                    Logger.info('Lock acquired after ' + attempts + ' attempts'
                             + ' | object=' + objectApiName + ' | Id=' + recordId)
-                        .category(URE_Logger.Category.LOCK)
+                        .category(Logger.Category.LOCK)
                         .inClass(CLS).inMethod('attemptLock')
                         .forObject(objectApiName)
                         .forRecord(recordId)
@@ -143,10 +143,10 @@ public with sharing class RetryLockHandler {
                 return outcomeLocked(locked, attempts);
 
             } catch (QueryException qe) {
-                URE_Logger.warn('Lock contention | object=' + objectApiName
+                Logger.warn('Lock contention | object=' + objectApiName
                         + ' | Id=' + recordId
                         + ' | attempt=' + attempts + '/' + MAX_RETRIES)
-                    .category(URE_Logger.Category.LOCK)
+                    .category(Logger.Category.LOCK)
                     .inClass(CLS).inMethod('attemptLock')
                     .forObject(objectApiName)
                     .forRecord(recordId)
@@ -155,9 +155,9 @@ public with sharing class RetryLockHandler {
         }
 
         // All retries exhausted
-        URE_Logger.error('Lock retries exhausted | object=' + objectApiName
+        Logger.error('Lock retries exhausted | object=' + objectApiName
                 + ' | Id=' + recordId + ' | attempts=' + attempts)
-            .category(URE_Logger.Category.LOCK)
+            .category(Logger.Category.LOCK)
             .inClass(CLS).inMethod('attemptLock')
             .forObject(objectApiName)
             .forRecord(recordId)
@@ -201,9 +201,9 @@ public with sharing class RetryLockHandler {
                 return outcomeLocked(outcome.lockedRecord, totalAttempts);
             }
 
-            URE_Logger.info('Skipping candidate ' + candidate.Id
+            Logger.info('Skipping candidate ' + candidate.Id
                     + ' | reason: ' + outcome.errorMessage)
-                .category(URE_Logger.Category.LOCK)
+                .category(Logger.Category.LOCK)
                 .inClass(CLS).inMethod('lockFirstAvailable')
                 .forObject(objectApiName)
                 .forRecord(candidate.Id)

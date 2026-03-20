@@ -69,12 +69,12 @@ public with sharing class DynamicQueryBuilder {
 
         soql += ' LIMIT ' + limitValue;
 
-        URE_Logger.debug('SOQL assembled | object=' + fromClause
+        Logger.debug('SOQL assembled | object=' + fromClause
                 + ' | whereClauses=' + bundle.conditions.size()
                 + ' | orderByClauses=' + (bundle.priorities != null ? bundle.priorities.size() : 0)
                 + ' | limit=' + limitValue
                 + ' | bindKeys=' + binds.size())
-            .category(URE_Logger.Category.QUERY_BUILD)
+            .category(Logger.Category.QUERY_BUILD)
             .inClass(CLS).inMethod('build')
             .forConfig(bundle.developerName)
             .forObject(bundle.objectApiName)
@@ -199,9 +199,9 @@ public with sharing class DynamicQueryBuilder {
                 return field + ' >= :' + bindKey;
             }
             when else {
-                URE_Logger.warn('Unknown operator "' + op + '" on field ' + field
+                Logger.warn('Unknown operator "' + op + '" on field ' + field
                         + ' — defaulting to IN')
-                    .category(URE_Logger.Category.QUERY_BUILD)
+                    .category(Logger.Category.QUERY_BUILD)
                     .inClass(CLS).inMethod('buildConditionClause')
                     .log();
                 return field + ' IN :' + bindKey;

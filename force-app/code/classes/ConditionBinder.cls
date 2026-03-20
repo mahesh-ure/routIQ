@@ -1,4 +1,4 @@
-z/**
+/**
  * @description Resolves Routing_Condition__mdt records into a typed bind-variable map
  *              for use with Database.queryWithBinds().
  *
@@ -44,8 +44,8 @@ public with sharing class ConditionBinder {
         Map<String, Object> bindMap = new Map<String, Object>();
 
         if (conditions == null || conditions.isEmpty()) {
-            URE_Logger.debug('No conditions to resolve — empty bind map')
-                .category(URE_Logger.Category.CONDITION_BIND)
+            Logger.debug('No conditions to resolve — empty bind map')
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('resolveAll')
                 .log();
             return bindMap;
@@ -58,13 +58,13 @@ public with sharing class ConditionBinder {
             // Step 1 — Resolve raw string values from the configured source
             List<String> rawValues = resolveRawValues(cond, userAttributes);
 
-            URE_Logger.debug('Condition b' + i
+            Logger.debug('Condition b' + i
                     + ' | field=' + cond.Field_API_Name__c
                     + ' | op=' + cond.Operator__c
                     + ' | source=' + cond.Value_Source__c
                     + ' | type=' + cond.Value_Type__c
                     + ' | rawCount=' + rawValues.size())
-                .category(URE_Logger.Category.CONDITION_BIND)
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('resolveAll')
                 .log();
 
@@ -80,9 +80,9 @@ public with sharing class ConditionBinder {
             }
         }
 
-        URE_Logger.debug('Bind resolution complete | conditions=' + conditions.size()
+        Logger.debug('Bind resolution complete | conditions=' + conditions.size()
                 + ' | bindKeys=' + bindMap.size())
-            .category(URE_Logger.Category.CONDITION_BIND)
+            .category(Logger.Category.CONDITION_BIND)
             .inClass(CLS).inMethod('resolveAll')
             .log();
 
@@ -138,9 +138,9 @@ public with sharing class ConditionBinder {
         List<String> result = new List<String>();
 
         if (userAttributes == null || String.isBlank(cond.User_Attribute_Field__c)) {
-            URE_Logger.warn('USER_ATTRIBUTE condition has no attributes map or field name'
+            Logger.warn('USER_ATTRIBUTE condition has no attributes map or field name'
                     + ' | field=' + cond.User_Attribute_Field__c)
-                .category(URE_Logger.Category.CONDITION_BIND)
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('resolveUserAttribute')
                 .log();
             return result;
@@ -148,9 +148,9 @@ public with sharing class ConditionBinder {
 
         Object fieldValue = userAttributes.get(cond.User_Attribute_Field__c);
         if (fieldValue == null) {
-            URE_Logger.debug('User attribute is null for field='
+            Logger.debug('User attribute is null for field='
                     + cond.User_Attribute_Field__c + ' — will produce empty bind list')
-                .category(URE_Logger.Category.CONDITION_BIND)
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('resolveUserAttribute')
                 .log();
             return result;
@@ -200,8 +200,8 @@ public with sharing class ConditionBinder {
             try {
                 result.add(Decimal.valueOf(val));
             } catch (Exception e) {
-                URE_Logger.warn('Skipping unparseable Decimal "' + val + '"')
-                    .category(URE_Logger.Category.CONDITION_BIND)
+                Logger.warn('Skipping unparseable Decimal "' + val + '"')
+                    .category(Logger.Category.CONDITION_BIND)
                     .inClass(CLS).inMethod('castToDecimalList')
                     .log();
             }
@@ -228,8 +228,8 @@ public with sharing class ConditionBinder {
             try {
                 result.add(Date.valueOf(val));
             } catch (Exception e) {
-                URE_Logger.warn('Skipping unparseable Date "' + val + '"')
-                    .category(URE_Logger.Category.CONDITION_BIND)
+                Logger.warn('Skipping unparseable Date "' + val + '"')
+                    .category(Logger.Category.CONDITION_BIND)
                     .inClass(CLS).inMethod('castToDateList')
                     .log();
             }
@@ -243,8 +243,8 @@ public with sharing class ConditionBinder {
             try {
                 result.add(DateTime.valueOf(val));
             } catch (Exception e) {
-                URE_Logger.warn('Skipping unparseable DateTime "' + val + '"')
-                    .category(URE_Logger.Category.CONDITION_BIND)
+                Logger.warn('Skipping unparseable DateTime "' + val + '"')
+                    .category(Logger.Category.CONDITION_BIND)
                     .inClass(CLS).inMethod('castToDateTimeList')
                     .log();
             }
@@ -290,8 +290,8 @@ public with sharing class ConditionBinder {
         try {
             return Decimal.valueOf(val);
         } catch (Exception e) {
-            URE_Logger.warn('Unparseable Decimal scalar "' + val + '"')
-                .category(URE_Logger.Category.CONDITION_BIND)
+            Logger.warn('Unparseable Decimal scalar "' + val + '"')
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('castToDecimal')
                 .log();
             return null;
@@ -313,8 +313,8 @@ public with sharing class ConditionBinder {
         try {
             return Date.valueOf(val);
         } catch (Exception e) {
-            URE_Logger.warn('Unparseable Date scalar "' + val + '"')
-                .category(URE_Logger.Category.CONDITION_BIND)
+            Logger.warn('Unparseable Date scalar "' + val + '"')
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('castToDate')
                 .log();
             return null;
@@ -325,8 +325,8 @@ public with sharing class ConditionBinder {
         try {
             return DateTime.valueOf(val);
         } catch (Exception e) {
-            URE_Logger.warn('Unparseable DateTime scalar "' + val + '"')
-                .category(URE_Logger.Category.CONDITION_BIND)
+            Logger.warn('Unparseable DateTime scalar "' + val + '"')
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('castToDateTime')
                 .log();
             return null;

@@ -43,7 +43,7 @@
     <allowInChatterGroups>false</allowInChatterGroups>
     <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
-    <description>One record per individual log line. Child of URE_Log__c. Insert-only. Bulk-inserted at flush time.</description>
+    <description>One record per individual log line. Child of Log__c. Insert-only. Bulk-inserted at flush time.</description>
     <enableActivities>false</enableActivities>
     <enableBulkApi>true</enableBulkApi>
     <enableFeeds>false</enableFeeds>
@@ -54,13 +54,13 @@
     <enableSharing>true</enableSharing>
     <enableStreamingApi>true</enableStreamingApi>
     <externalSharingModel>ControlledByParent</externalSharingModel>
-    <label>URE Log Entry</label>
+    <label>Log Entry</label>
     <nameField>
         <displayFormat>LE-{00000}</displayFormat>
         <label>Entry Number</label>
         <type>AutoNumber</type>
     </nameField>
-    <pluralLabel>URE Log Entries</pluralLabel>
+    <pluralLabel>Log Entries</pluralLabel>
     <searchLayouts/>
     <sharingModel>ControlledByParent</sharingModel>
     <visibility>Public</visibility>

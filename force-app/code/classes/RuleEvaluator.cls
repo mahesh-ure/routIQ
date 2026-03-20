@@ -91,8 +91,8 @@ public with sharing class RuleEvaluator {
                 String warning = 'Config "' + bundle.developerName
                     + '" skipped: ' + String.join(errors, '; ');
                 result.validationWarnings.add(warning);
-                URE_Logger.warn(warning)
-                    .category(URE_Logger.Category.VALIDATION)
+                Logger.warn(warning)
+                    .category(Logger.Category.VALIDATION)
                     .inClass(CLS).inMethod('evaluate')
                     .forConfig(bundle.developerName)
                     .forObject(bundle.objectApiName)
@@ -105,12 +105,12 @@ public with sharing class RuleEvaluator {
             collectUserFields(bundle.conditions, result.requiredUserFields);
         }
 
-        URE_Logger.debug('Rule evaluation complete | evaluated=' + bundles.size()
+        Logger.debug('Rule evaluation complete | evaluated=' + bundles.size()
                 + ' | applicable=' + result.applicableBundles.size()
                 + ' | skippedNotApplicable=' + skippedNotApplicable
                 + ' | validationWarnings=' + result.validationWarnings.size()
                 + ' | userFields=' + result.requiredUserFields.size())
-            .category(URE_Logger.Category.CONDITION_BIND)
+            .category(Logger.Category.CONDITION_BIND)
             .inClass(CLS).inMethod('evaluate')
             .log();
 

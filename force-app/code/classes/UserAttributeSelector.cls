@@ -65,8 +65,8 @@ public with sharing class UserAttributeSelector {
         );
 
         if (results.isEmpty()) {
-            URE_Logger.warn('User not found for Id=' + userId)
-                .category(URE_Logger.Category.CONDITION_BIND)
+            Logger.warn('User not found for Id=' + userId)
+                .category(Logger.Category.CONDITION_BIND)
                 .inClass(CLS).inMethod('getAttributes')
                 .log();
             return new Map<String, Object>();
@@ -79,10 +79,10 @@ public with sharing class UserAttributeSelector {
             attributes.put(field, userRecord.get(field));
         }
 
-        URE_Logger.debug('User attributes fetched | userId=' + userId
+        Logger.debug('User attributes fetched | userId=' + userId
                 + ' | fieldsRequested=' + fieldApiNames.size()
                 + ' | fieldsReturned=' + attributes.size())
-            .category(URE_Logger.Category.CONDITION_BIND)
+            .category(Logger.Category.CONDITION_BIND)
             .inClass(CLS).inMethod('getAttributes')
             .withLimits()
             .log();
