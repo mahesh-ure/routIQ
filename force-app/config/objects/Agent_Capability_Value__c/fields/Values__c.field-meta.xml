@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Values__c</fullName>
+    <description>Comma or semicolon delimited values the agent can handle for this capability. E.g. Ontario,Quebec or English;French. Long Text Area to support agents with many values (regions, product lines, etc.). Parsed by AgentMatcher using the same delimiter logic as ConditionBinder.</description>
+    <externalId>false</externalId>
+    <label>Values</label>
+    <length>4000</length>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

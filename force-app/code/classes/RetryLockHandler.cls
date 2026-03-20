@@ -5,12 +5,14 @@
  *              In the pull model, multiple agents may simultaneously request the
  *              next record. SELECT … FOR UPDATE can fail when two agents target the
  *              same candidate. This handler retries a lock-acquiring operation up to
- *              MAX_RETRIES times, giving concurrent transactions time to complete.
+ *              maxRetries times, giving concurrent transactions time to complete.
+ *
+ *              v2 change: MAX_RETRIES is now admin-configurable via
+ *              Routing_Config__mdt.Max_Retry_Attempts__c (default 1). The constant
+ *              remains as a fallback when no config value is provided. Admin can
+ *              increase for high-contention environments.
  *
  *              Design decisions:
- *              • Retry bound is a constant (5) — sufficient for typical contention
- *                without exhausting CPU limits. Salesforce CPU limit is 10s/60s;
- *                each retry attempt is sub-millisecond overhead.
  *              • Does NOT use Thread.sleep() — Apex doesn't support it and retries
  *                are immediate. The lock wait happens inside the SOQL FOR UPDATE
  *                itself (Salesforce waits ~5s per attempt before throwing).
@@ -27,8 +29,9 @@ public with sharing class RetryLockHandler {
 
     private static final String CLS = 'RetryLockHandler';
 
+    /** Fallback when Config.Max_Retry_Attempts__c is not set. Default 1 in v2. */
     @TestVisible
-    private static final Integer MAX_RETRIES = 5;
+    private static final Integer DEFAULT_MAX_RETRIES = 1;
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
@@ -91,26 +94,27 @@ public with sharing class RetryLockHandler {
 
     /**
      * @description Attempts to acquire a row lock on a single candidate record via
-     *              AssignmentSelector.lockRecord(), retrying up to MAX_RETRIES times
+     *              AssignmentSelector.lockRecord(), retrying up to maxRetries times
      *              on UNABLE_TO_LOCK_ROW.
      *
-     *              On each contention failure the handler catches QueryException and
-     *              immediately retries — the next attempt will queue behind any
-     *              competing lock inside the database engine.
-     *
-     * @param objectApiName    SObject API name (from ConfigBundle)
+     * @param objectApiName     SObject API name (from ConfigBundle)
      * @param ownerFieldApiName Owner field API name (from ConfigBundle)
      * @param recordId          Id of the candidate to lock
+     * @param maxRetries        Max retry attempts (from ConfigBundle.maxRetryAttempts)
      * @return RetryOutcome with locked record on success, or failure details
      */
     public static RetryOutcome attemptLock(
         String objectApiName,
         String ownerFieldApiName,
-        Id recordId
+        Id recordId,
+        Integer maxRetries
     ) {
+        Integer effectiveMax = (maxRetries != null && maxRetries > 0)
+            ? maxRetries
+            : DEFAULT_MAX_RETRIES;
         Integer attempts = 0;
 
-        while (attempts < MAX_RETRIES) {
+        while (attempts < effectiveMax) {
             attempts++;
 
             try {
@@ -167,6 +171,17 @@ public with sharing class RetryLockHandler {
     }
 
     /**
+     * @description Backward-compatible overload using DEFAULT_MAX_RETRIES.
+     */
+    public static RetryOutcome attemptLock(
+        String objectApiName,
+        String ownerFieldApiName,
+        Id recordId
+    ) {
+        return attemptLock(objectApiName, ownerFieldApiName, recordId, DEFAULT_MAX_RETRIES);
+    }
+
+    /**
      * @description Attempts to lock candidates from an ordered list, trying the next
      *              candidate when the current one fails all lock retries.
      *
@@ -177,13 +192,15 @@ public with sharing class RetryLockHandler {
      * @param objectApiName     SObject API name
      * @param ownerFieldApiName Owner field API name
      * @param candidates        Priority-sorted candidate records from CandidateSelector
+     * @param maxRetries        Max retry attempts per candidate
      * @return RetryOutcome for the first successfully locked candidate,
      *         or an exhausted outcome if no candidate could be locked
      */
     public static RetryOutcome lockFirstAvailable(
         String objectApiName,
         String ownerFieldApiName,
-        List<SObject> candidates
+        List<SObject> candidates,
+        Integer maxRetries
     ) {
         if (candidates == null || candidates.isEmpty()) {
             return outcomeExhausted(0);
@@ -193,7 +210,7 @@ public with sharing class RetryLockHandler {
 
         for (SObject candidate : candidates) {
             RetryOutcome outcome = attemptLock(
-                objectApiName, ownerFieldApiName, candidate.Id
+                objectApiName, ownerFieldApiName, candidate.Id, maxRetries
             );
             totalAttempts += outcome.retryCount;
 
@@ -211,5 +228,16 @@ public with sharing class RetryLockHandler {
         }
 
         return outcomeExhausted(totalAttempts);
+    }
+
+    /**
+     * @description Backward-compatible overload using DEFAULT_MAX_RETRIES.
+     */
+    public static RetryOutcome lockFirstAvailable(
+        String objectApiName,
+        String ownerFieldApiName,
+        List<SObject> candidates
+    ) {
+        return lockFirstAvailable(objectApiName, ownerFieldApiName, candidates, DEFAULT_MAX_RETRIES);
     }
 }

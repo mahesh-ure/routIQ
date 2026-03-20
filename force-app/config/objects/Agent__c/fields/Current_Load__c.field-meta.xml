@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Current_Load__c</fullName>
+    <defaultValue>0</defaultValue>
+    <description>Current open work items assigned to this agent. Incremented by AssignmentResolver on successful routing. Compared against Max_Capacity__c before allowing new assignments.</description>
+    <externalId>false</externalId>
+    <label>Current Load</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
