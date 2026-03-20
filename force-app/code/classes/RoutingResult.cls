@@ -12,30 +12,39 @@
  */
 global with sharing class RoutingResult {
 
+    @AuraEnabled
     @InvocableVariable(label='Record Id' description='ID of the routed record' required=false)
     global String recordId;
 
+    @AuraEnabled
     @InvocableVariable(label='Success' description='True if a record was successfully assigned' required=false)
     global Boolean success;
 
+    @AuraEnabled
     @InvocableVariable(label='Assigned To' description='User ID of the agent who received the assignment' required=false)
     global String assignedTo;
 
+    @AuraEnabled
     @InvocableVariable(label='Routing Log Id' description='ID of the Routing Log audit record' required=false)
     global String routingLogId;
 
+    @AuraEnabled
     @InvocableVariable(label='Error Message' description='Blank on success. Describes the failure reason.' required=false)
     global String errorMessage;
 
+    @AuraEnabled
     @InvocableVariable(label='Object API Name' description='API name of the routed SObject (e.g. Case, Loan_Application__c)' required=false)
     global String objectApiName;
 
+    @AuraEnabled
     @InvocableVariable(label='Record Name' description='Display name of the routed record (e.g. CaseNumber for Case, Name for custom objects)' required=false)
     global String recordName;
 
+    @AuraEnabled
     @InvocableVariable(label='Entry Point' description='Integration surface that initiated routing (InvocableMethod, REST, LWC, GlobalAction)' required=false)
     global String entryPoint;
 
+    @AuraEnabled
     @InvocableVariable(label='Retry Count' description='Number of FOR UPDATE lock retries before resolution' required=false)
     global Integer retryCount;
 

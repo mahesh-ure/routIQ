@@ -32,17 +32,17 @@ public with sharing class CandidateSelector {
             AccessLevel.USER_MODE
         );
 
-        URE_Logger.info('Candidate query executed | object=' + spec.objectApiName
+        Logger.info('Candidate query executed | object=' + spec.objectApiName
                 + ' | returned=' + results.size())
-            .category(URE_Logger.Category.CANDIDATE)
+            .category(Logger.Category.CANDIDATE)
             .inClass(CLS).inMethod('query')
             .forObject(spec.objectApiName)
             .withLimits()
             .log();
 
         if (results.isEmpty()) {
-            URE_Logger.debug('Zero candidates returned for ' + spec.objectApiName)
-                .category(URE_Logger.Category.CANDIDATE)
+            Logger.debug('Zero candidates returned for ' + spec.objectApiName)
+                .category(Logger.Category.CANDIDATE)
                 .inClass(CLS).inMethod('query')
                 .forObject(spec.objectApiName)
                 .log();

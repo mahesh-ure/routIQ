@@ -201,9 +201,9 @@ public with sharing class AssignmentResolver {
     ) {
         // ─── Guard: no candidates ─────────────────────────────────────────
         if (candidates == null || candidates.isEmpty()) {
-            URE_Logger.info('No candidates for assignment'
+            Logger.info('No candidates for assignment'
                     + ' | config=' + bundle.developerName)
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('resolve')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)
@@ -221,10 +221,10 @@ public with sharing class AssignmentResolver {
                 agentUserId
             );
             if (!existing.isEmpty()) {
-                URE_Logger.info('Agent already assigned (Allow_Multiple=false)'
+                Logger.info('Agent already assigned (Allow_Multiple=false)'
                         + ' | config=' + bundle.developerName
                         + ' | agent=' + agentUserId)
-                    .category(URE_Logger.Category.ASSIGNMENT)
+                    .category(Logger.Category.ASSIGNMENT)
                     .inClass(CLS).inMethod('resolve')
                     .forConfig(bundle.developerName)
                     .forObject(bundle.objectApiName)
@@ -242,11 +242,11 @@ public with sharing class AssignmentResolver {
         );
 
         if (!lockOutcome.success) {
-            URE_Logger.error('Lock exhausted for all candidates'
+            Logger.error('Lock exhausted for all candidates'
                     + ' | config=' + bundle.developerName
                     + ' | candidateCount=' + candidateCount
                     + ' | totalRetries=' + lockOutcome.retryCount)
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('resolve')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)
@@ -271,9 +271,9 @@ public with sharing class AssignmentResolver {
 
             if (!sr.isSuccess()) {
                 String dmlErrors = formatDmlErrors(sr.getErrors());
-                URE_Logger.error('Assignment DML failed | object=' + bundle.objectApiName
+                Logger.error('Assignment DML failed | object=' + bundle.objectApiName
                         + ' | Id=' + lockedRecord.Id + ' | errors=' + dmlErrors)
-                    .category(URE_Logger.Category.ASSIGNMENT)
+                    .category(Logger.Category.ASSIGNMENT)
                     .inClass(CLS).inMethod('resolve')
                     .forConfig(bundle.developerName)
                     .forObject(bundle.objectApiName)
@@ -287,14 +287,11 @@ public with sharing class AssignmentResolver {
                 );
             }
 
-            // ─── Increment agent load + set Last_Assigned__c ────────────
-            incrementAgentLoad(agentUserId);
-
-            URE_Logger.info('Assignment succeeded | object=' + bundle.objectApiName
+            Logger.info('Assignment succeeded | object=' + bundle.objectApiName
                     + ' | recordId=' + lockedRecord.Id
                     + ' | agent=' + agentUserId
                     + ' | retries=' + lockOutcome.retryCount)
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('resolve')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)
@@ -309,9 +306,9 @@ public with sharing class AssignmentResolver {
             );
 
         } catch (DmlException dmlEx) {
-            URE_Logger.error('DmlException during assignment | object=' + bundle.objectApiName
+            Logger.error('DmlException during assignment | object=' + bundle.objectApiName
                     + ' | Id=' + lockedRecord.Id)
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('resolve')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)

@@ -2,8 +2,8 @@
  * @description Creates insert-only Routing_Log__c audit records from routing outcomes.
  *
  *              Routing_Log__c is the BUSINESS audit trail — always written, never disabled.
- *              This is distinct from URE_Logger (diagnostic observability that CAN be
- *              turned off via URE_Log_Config__mdt).
+ *              This is distinct from Logger (diagnostic observability that CAN be
+ *              turned off via Log_Config__mdt).
  *
  *              v2 changes:
  *              • Status__c uses consolidated uppercase values (ASSIGNED, NO_MATCH,
@@ -77,10 +77,10 @@ public with sharing class AuditLogger {
 
         log.Query_Bind_Snapshot__c = sanitizeBindSnapshot(spec);
 
-        URE_Logger.debug('Audit entry created | config=' + bundle.developerName
+        Logger.debug('Audit entry created | config=' + bundle.developerName
                 + ' | status=' + outcome.status
                 + ' | recordId=' + outcome.recordId)
-            .category(URE_Logger.Category.AUDIT)
+            .category(Logger.Category.AUDIT)
             .inClass(CLS).inMethod('createEntry')
             .forConfig(bundle.developerName)
             .forObject(bundle.objectApiName)
@@ -127,18 +127,18 @@ public with sharing class AuditLogger {
                 logIds.add(null);
                 failCount++;
                 String errMsg = formatErrors(sr.getErrors());
-                URE_Logger.error('Audit insert failed | config='
+                Logger.error('Audit insert failed | config='
                         + logs[i].Config_Developer_Name__c
                         + ' | errors=' + errMsg)
-                    .category(URE_Logger.Category.AUDIT)
+                    .category(Logger.Category.AUDIT)
                     .inClass(CLS).inMethod('flush')
                     .log();
             }
         }
 
-        URE_Logger.info('Audit flush complete | inserted=' + successCount
+        Logger.info('Audit flush complete | inserted=' + successCount
                 + ' | failed=' + failCount)
-            .category(URE_Logger.Category.AUDIT)
+            .category(Logger.Category.AUDIT)
             .inClass(CLS).inMethod('flush')
             .withLimits()
             .log();

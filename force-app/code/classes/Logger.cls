@@ -1,15 +1,15 @@
 /**
- * URE_Logger
+ * Logger
  * ─────────────────────────────────────────────────────────────────────────────
  * Transaction-scoped singleton logging framework for routIQ — Universal
  * Routing Engine (URE).
  *
  * DESIGN GOALS
  *   - Zero SOQL in the hot path.  All logging is buffered in a static List.
- *   - Two DML statements at flush time — one for the URE_Log__c header,
- *     one bulk insert for all URE_Log_Entry__c records.
+ *   - Two DML statements at flush time — one for the Log__c header,
+ *     one bulk insert for all Log_Entry__c records.
  *   - Fluent builder API — readable call sites in every engine class.
- *   - Configurable via URE_Log_Config__mdt — zero deployment to change
+ *   - Configurable via Log_Config__mdt — zero deployment to change
  *     log level or disable logging entirely.
  *   - Governor-aware — automatic WARN when any limit exceeds threshold.
  *   - Level-gated string work — message strings are only evaluated after
@@ -23,11 +23,11 @@
  *
  * TOTAL URE DML BUDGET after this class:
  *   1 (assignment update) + 1 (Routing_Log__c bulk insert)
- *   + 1 (URE_Log__c header) + 1 (URE_Log_Entry__c bulk insert) = 4 DML
+ *   + 1 (Log__c header) + 1 (Log_Entry__c bulk insert) = 4 DML
  *   Well within the 150-statement limit.
  *
- * INTEGRATION POINTS (where callers should call URE_Logger)
- *   RoutingService.execute()         -> URE_Logger.init() then URE_Logger.flush()
+ * INTEGRATION POINTS (where callers should call Logger)
+ *   RoutingService.execute()         -> Logger.init() then Logger.flush()
  *   ConfigLoader.load()              -> info / debug entries
  *   ConditionBinder.resolveAll()     -> debug entries per condition
  *   DynamicQueryBuilder.build()      -> debug with query structure (no values)
@@ -42,7 +42,7 @@
  * Author: routIQ Engineering — CTA-reviewed
  * ─────────────────────────────────────────────────────────────────────────────
  */
-public without sharing class URE_Logger {
+public without sharing class Logger {
 
     // ─── Version ──────────────────────────────────────────────────────────────
     public static final String FRAMEWORK_VERSION = '1.0.0';
@@ -54,14 +54,14 @@ public without sharing class URE_Logger {
      * Prevents runaway logging from blowing the heap limit.
      * When the buffer is full, new entries are silently dropped —
      * the logger never throws; it degrades gracefully.
-     * Configurable via URE_Log_Config__mdt.Max_Buffer_Entries__c.
+     * Configurable via Log_Config__mdt.Max_Buffer_Entries__c.
      */
     @TestVisible
     private static Integer MAX_BUFFER_ENTRIES = 500;
 
     /**
      * Auto-emit a WARN entry when any governor limit reaches this percentage.
-     * Configurable via URE_Log_Config__mdt.Gov_Warn_Threshold_Pct__c.
+     * Configurable via Log_Config__mdt.Gov_Warn_Threshold_Pct__c.
      */
     @TestVisible
     private static Decimal GOV_WARN_THRESHOLD_PCT = 70.0;
@@ -93,7 +93,7 @@ public without sharing class URE_Logger {
 
     /**
      * Routing engine phase that generated this entry.
-     * Allows filtering log entries by phase in the URE_Log_Entry__c list view
+     * Allows filtering log entries by phase in the Log_Entry__c list view
      * without parsing message text.
      */
     public enum Category {
@@ -169,7 +169,7 @@ public without sharing class URE_Logger {
      * Fluent builder returned by every log-level entry point.
      *
      * USAGE PATTERN:
-     *   URE_Logger.info('Candidates returned: ' + count)
+     *   Logger.info('Candidates returned: ' + count)
      *       .category(Category.CANDIDATE)
      *       .inClass('CandidateSelector')
      *       .inMethod('query')
@@ -179,7 +179,7 @@ public without sharing class URE_Logger {
      *       .log();  <- terminal call — commits to buffer
      *
      * The builder is a NO-OP when:
-     *   - URE_Logger is not initialised (init() was never called).
+     *   - Logger is not initialised (init() was never called).
      *   - Logging is disabled via CMDT.
      *   - The entry level is below minimumLevel.
      * No exceptions are thrown in any of these cases.
@@ -211,7 +211,7 @@ public without sharing class URE_Logger {
 
             // Full snapshot only when configured or PERF level
             if (capturePerEntry || lvl == Level.PERF) {
-                rec.govSnapshot = URE_GovLimits.capture().toCompactDisplay();
+                rec.govSnapshot = GovLimits.capture().toCompactDisplay();
             }
         }
 
@@ -301,7 +301,7 @@ public without sharing class URE_Logger {
          * Always used automatically for PERF-level entries.
          */
         public Builder withLimits() {
-            if (active) rec.govSnapshot = URE_GovLimits.capture().toCompactDisplay();
+            if (active) rec.govSnapshot = GovLimits.capture().toCompactDisplay();
             return this;
         }
 
@@ -333,7 +333,7 @@ public without sharing class URE_Logger {
      * Idempotent — safe to call multiple times in the same transaction;
      * subsequent calls are ignored.
      *
-     * Reads URE_Log_Config__mdt via CMDT.getAll() — zero SOQL.
+     * Reads Log_Config__mdt via CMDT.getAll() — zero SOQL.
      *
      * @param ep      Entry point label (InvocableMethod / REST / LWC / GlobalAction)
      * @param userId  Id of the agent making the routing request
@@ -362,7 +362,7 @@ public without sharing class URE_Logger {
              + ' | user=' + userId
              + ' | frameworkVersion=' + FRAMEWORK_VERSION)
             .category(Category.ENGINE)
-            .inClass('URE_Logger')
+            .inClass('Logger')
             .inMethod('init')
             .withLimits()
             .log();
@@ -415,19 +415,19 @@ public without sharing class URE_Logger {
      *
      * Call once at the very end of RoutingService.execute(), AFTER
      * AuditLogger.logBulk() has already inserted Routing_Log__c records.
-     * This keeps the URE_Logger DML budget isolated from the routing DML.
+     * This keeps the Logger DML budget isolated from the routing DML.
      *
-     * DML cost: 1 (URE_Log__c insert) + 1 (URE_Log_Entry__c bulk insert) = 2.
+     * DML cost: 1 (Log__c insert) + 1 (Log_Entry__c bulk insert) = 2.
      *
-     * Returns the inserted URE_Log__c record (for test assertions).
+     * Returns the inserted Log__c record (for test assertions).
      * Returns null if logging is disabled.
      *
      * @param  finalStatus  The overall routing outcome:
      *                      Success / Failure / No_Match / Retry_Exhausted /
      *                      Lock_Contention / Partial
-     * @return URE_Log__c  The inserted log header, or null.
+     * @return Log__c  The inserted log header, or null.
      */
-    public static URE_Log__c flush(String finalStatus) {
+    public static Log__c flush(String finalStatus) {
         if (!isInitialized || !isEnabled) return null;
 
         Long endMs = System.currentTimeMillis();
@@ -436,7 +436,7 @@ public without sharing class URE_Logger {
         if (entryPoint == null)     entryPoint     = 'Test';
 
         // Take a final snapshot BEFORE our own DML adds to the counters
-        URE_GovLimits finalLimits = URE_GovLimits.capture();
+        GovLimits finalLimits = GovLimits.capture();
 
         // Auto-warn if any limit is approaching the threshold
         if (finalLimits.isApproachingLimit(GOV_WARN_THRESHOLD_PCT)) {
@@ -444,7 +444,7 @@ public without sharing class URE_Logger {
                  + GOV_WARN_THRESHOLD_PCT + '%) — '
                  + finalLimits.toCompactDisplay())
                 .category(Category.PERFORMANCE)
-                .inClass('URE_Logger')
+                .inClass('Logger')
                 .inMethod('flush')
                 .log();
         }
@@ -459,12 +459,12 @@ public without sharing class URE_Logger {
              + ' | objects=['   + String.join(new List<String>(objectsRouted),  ',') + ']'
              + ' | '            + finalLimits.toCompactDisplay())
             .category(Category.ENGINE)
-            .inClass('URE_Logger')
+            .inClass('Logger')
             .inMethod('flush')
             .log();
 
         // ── Build and insert log header ────────────────────────────────────
-        URE_Log__c logHeader = new URE_Log__c(
+        Log__c logHeader = new Log__c(
             Transaction_Id__c     = transactionId,
             Entry_Point__c        = entryPoint,
             User__c               = runningUserId,
@@ -494,10 +494,10 @@ public without sharing class URE_Logger {
         insert logHeader; // DML statement 1
 
         // ── Build and bulk-insert entries ─────────────────────────────────
-        List<URE_Log_Entry__c> entries = new List<URE_Log_Entry__c>();
+        List<Log_Entry__c> entries = new List<Log_Entry__c>();
 
         for (EntryBuffer b : buffer) {
-            entries.add(new URE_Log_Entry__c(
+            entries.add(new Log_Entry__c(
                 Log__c                 = logHeader.Id,
                 Sequence__c            = b.sequence,
                 Timestamp__c           = b.entryTime,
@@ -526,7 +526,7 @@ public without sharing class URE_Logger {
             insert entries; // DML statement 2 — bulk, one statement regardless of count
         }
 
-        URE_Log__c result = logHeader;
+        Log__c result = logHeader;
         reset(); // clear static state
         return result;
     }
@@ -534,15 +534,15 @@ public without sharing class URE_Logger {
     // ─── Private Helpers ─────────────────────────────────────────────────────
 
     /**
-     * Load framework configuration from URE_Log_Config__mdt.
+     * Load framework configuration from Log_Config__mdt.
      * CMDT.getAll() is zero SOQL — platform-cached.
      * Falls back to safe defaults if no record exists.
      */
     private static void loadConfig() {
-        Map<String, URE_Log_Config__mdt> configs =
-            URE_Log_Config__mdt.getAll();
+        Map<String, Log_Config__mdt> configs =
+            Log_Config__mdt.getAll();
 
-        URE_Log_Config__mdt cfg = configs.get('Default');
+        Log_Config__mdt cfg = configs.get('Default');
         if (cfg == null) return; // use class-level defaults
 
         isEnabled       = cfg.Is_Enabled__c;

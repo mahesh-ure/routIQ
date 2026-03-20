@@ -43,7 +43,7 @@
     <allowInChatterGroups>false</allowInChatterGroups>
     <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
-    <description>One record per Apex transaction. URE Logger header. Insert-only — never updated after creation. Powers diagnostic dashboards.</description>
+    <description>One record per Apex transaction. Logger header. Insert-only — never updated after creation. Powers diagnostic dashboards.</description>
     <enableActivities>false</enableActivities>
     <enableBulkApi>true</enableBulkApi>
     <enableFeeds>false</enableFeeds>
@@ -54,13 +54,13 @@
     <enableSharing>true</enableSharing>
     <enableStreamingApi>true</enableStreamingApi>
     <externalSharingModel>ReadWrite</externalSharingModel>
-    <label>URE Log</label>
+    <label>Log</label>
     <nameField>
         <displayFormat>LOG-{00000}</displayFormat>
-        <label>URE Log Number</label>
+        <label>Log Number</label>
         <type>AutoNumber</type>
     </nameField>
-    <pluralLabel>URE Logs</pluralLabel>
+    <pluralLabel>Logs</pluralLabel>
     <searchLayouts/>
     <sharingModel>ReadWrite</sharingModel>
     <visibility>Public</visibility>

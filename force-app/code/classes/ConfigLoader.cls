@@ -37,11 +37,10 @@ public with sharing class ConfigLoader {
         Map<String, Agent_Match_Condition__mdt> allMatchConditions =
             RoutingConfigSelector.getAllMatchConditions();
 
-        URE_Logger.debug('CMDT loaded | configs=' + allConfigs.size()
+        Logger.debug('CMDT loaded | configs=' + allConfigs.size()
                 + ' | conditions=' + allConditions.size()
-                + ' | priorities=' + allPriorities.size()
-                + ' | matchConditions=' + allMatchConditions.size())
-            .category(URE_Logger.Category.CONFIG)
+                + ' | priorities=' + allPriorities.size())
+            .category(Logger.Category.CONFIG)
             .inClass(CLS).inMethod('loadActive')
             .log();
 
@@ -62,8 +61,8 @@ public with sharing class ConfigLoader {
 
             String parentDevName = configIdToDevName.get(cond.Routing_Config__c);
             if (parentDevName == null) {
-                URE_Logger.debug('Orphan condition skipped: ' + cond.DeveloperName)
-                    .category(URE_Logger.Category.CONFIG)
+                Logger.debug('Orphan condition skipped: ' + cond.DeveloperName)
+                    .category(Logger.Category.CONFIG)
                     .inClass(CLS).inMethod('loadActive')
                     .log();
                 continue;
@@ -150,9 +149,9 @@ public with sharing class ConfigLoader {
         // Step 7 — Sort bundles by Priority_Weight__c ascending
         bundles.sort();
 
-        URE_Logger.info('Config load complete | activeBundles=' + bundles.size()
+        Logger.info('Config load complete | activeBundles=' + bundles.size()
                 + ' | skippedInactive=' + skippedInactive)
-            .category(URE_Logger.Category.CONFIG)
+            .category(Logger.Category.CONFIG)
             .inClass(CLS).inMethod('loadActive')
             .log();
 

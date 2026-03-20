@@ -51,9 +51,9 @@ public with sharing class RoutingEngine {
         // ─── Phase 1: Validate Request ────────────────────────────────────
         List<String> validationErrors = request.validate();
         if (!validationErrors.isEmpty()) {
-            URE_Logger.warn('Request validation failed: '
+            Logger.warn('Request validation failed: '
                     + String.join(validationErrors, '; '))
-                .category(URE_Logger.Category.VALIDATION)
+                .category(Logger.Category.VALIDATION)
                 .inClass(CLS).inMethod('execute')
                 .log();
             return RoutingResult.failure(
@@ -63,16 +63,16 @@ public with sharing class RoutingEngine {
         }
 
         // ── PERF snapshot: after validation ─────────────────────────────
-        URE_Logger.perf('Phase 1 complete: request validated')
-            .category(URE_Logger.Category.PERFORMANCE)
+        Logger.perf('Phase 1 complete: request validated')
+            .category(Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
 
         // ─── Phase 2: Load All Active Configs (0 SOQL) ───────────────────
         List<ConfigBundle> allBundles = ConfigLoader.loadActive();
         if (allBundles.isEmpty()) {
-            URE_Logger.warn('No active routing configurations found')
-                .category(URE_Logger.Category.CONFIG)
+            Logger.warn('No active routing configurations found')
+                .category(Logger.Category.CONFIG)
                 .inClass(CLS).inMethod('execute')
                 .log();
             return RoutingResult.failure(
@@ -82,8 +82,8 @@ public with sharing class RoutingEngine {
         }
 
         // ── PERF snapshot: after config load ────────────────────────────
-        URE_Logger.perf('Phase 2 complete: ' + allBundles.size() + ' configs loaded')
-            .category(URE_Logger.Category.PERFORMANCE)
+        Logger.perf('Phase 2 complete: ' + allBundles.size() + ' configs loaded')
+            .category(Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
 
@@ -93,27 +93,28 @@ public with sharing class RoutingEngine {
 
         if (evalResult.applicableBundles.isEmpty()) {
             for (String warning : evalResult.validationWarnings) {
-                URE_Logger.warn(warning)
-                    .category(URE_Logger.Category.VALIDATION)
+                Logger.warn(warning)
+                    .category(Logger.Category.VALIDATION)
                     .inClass(CLS).inMethod('execute')
                     .log();
             }
-            URE_Logger.info('No applicable configs after evaluation')
-                .category(URE_Logger.Category.CONFIG)
+            Logger.info('No applicable configs after evaluation')
+                .category(Logger.Category.CONFIG)
                 .inClass(CLS).inMethod('execute')
                 .log();
             return RoutingResult.noMatch();
         }
 
-        URE_Logger.info('Applicable configs: ' + evalResult.applicableBundles.size())
-            .category(URE_Logger.Category.CONFIG)
+        Logger.info('Applicable configs: ' + evalResult.applicableBundles.size()
+                + ' | userFields: ' + evalResult.requiredUserFields.size())
+            .category(Logger.Category.CONFIG)
             .inClass(CLS).inMethod('execute')
             .log();
 
         // ── PERF snapshot: after rule evaluation ────────────────────────
-        URE_Logger.perf('Phase 3 complete: ' + evalResult.applicableBundles.size()
+        Logger.perf('Phase 3 complete: ' + evalResult.applicableBundles.size()
                 + ' applicable bundles')
-            .category(URE_Logger.Category.PERFORMANCE)
+            .category(Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
 
@@ -123,9 +124,10 @@ public with sharing class RoutingEngine {
         AgentCapabilitySelector.getActiveAgentsByUserId();
         AgentCapabilitySelector.getAllCapabilityValues();
 
-        // ── PERF snapshot: after agent data load ────────────────────────
-        URE_Logger.perf('Phase 4 complete: agent data pre-loaded (cached)')
-            .category(URE_Logger.Category.PERFORMANCE)
+        // ── PERF snapshot: after user attribute query ───────────────────
+        Logger.perf('Phase 4 complete: user attributes fetched'
+                + ' | fieldCount=' + userAttributes.size())
+            .category(Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
 
@@ -139,11 +141,11 @@ public with sharing class RoutingEngine {
             for (Integer i = 0; i < evalResult.applicableBundles.size(); i++) {
                 ConfigBundle bundle = evalResult.applicableBundles[i];
 
-                URE_Logger.info('Processing bundle ' + (i + 1)
+                Logger.info('Processing bundle ' + (i + 1)
                         + '/' + evalResult.applicableBundles.size()
                         + ': "' + bundle.developerName + '"'
                         + ' | object=' + bundle.objectApiName)
-                    .category(URE_Logger.Category.ENGINE)
+                    .category(Logger.Category.ENGINE)
                     .inClass(CLS).inMethod('execute')
                     .forConfig(bundle.developerName)
                     .forObject(bundle.objectApiName)
@@ -162,11 +164,11 @@ public with sharing class RoutingEngine {
                         bundle.objectApiName
                     );
 
-                    URE_Logger.info('Assignment succeeded for "'
+                    Logger.info('Assignment succeeded for "'
                             + bundle.developerName + '"'
                             + ' | recordId=' + processed.outcome.recordId
                             + ' | retries=' + processed.outcome.retryCount)
-                        .category(URE_Logger.Category.ASSIGNMENT)
+                        .category(Logger.Category.ASSIGNMENT)
                         .inClass(CLS).inMethod('execute')
                         .forConfig(bundle.developerName)
                         .forObject(bundle.objectApiName)
@@ -178,9 +180,9 @@ public with sharing class RoutingEngine {
             }
         } finally {
             // ── PERF snapshot: before audit flush ───────────────────────
-            URE_Logger.perf('Phase 5 complete: bundle processing done'
+            Logger.perf('Phase 5 complete: bundle processing done'
                     + ' | auditEntries=' + auditEntries.size())
-                .category(URE_Logger.Category.PERFORMANCE)
+                .category(Logger.Category.PERFORMANCE)
                 .inClass(CLS).inMethod('execute')
                 .log();
 
@@ -199,9 +201,9 @@ public with sharing class RoutingEngine {
             }
 
             // ── PERF snapshot: after audit flush ────────────────────────
-            URE_Logger.perf('Phase 6 complete: audit flushed'
+            Logger.perf('Phase 6 complete: audit flushed'
                     + ' | logIds=' + logIds.size())
-                .category(URE_Logger.Category.PERFORMANCE)
+                .category(Logger.Category.PERFORMANCE)
                 .inClass(CLS).inMethod('execute')
                 .log();
         }
@@ -219,8 +221,8 @@ public with sharing class RoutingEngine {
         }
 
         // No bundle produced a successful assignment
-        URE_Logger.info('No bundle produced a successful assignment')
-            .category(URE_Logger.Category.ENGINE)
+        Logger.info('No bundle produced a successful assignment')
+            .category(Logger.Category.ENGINE)
             .inClass(CLS).inMethod('execute')
             .log();
         return RoutingResult.noMatch();
@@ -334,8 +336,8 @@ public with sharing class RoutingEngine {
 
         } catch (Exception ex) {
             // ── Per-bundle failure — log and continue ─────────────────────
-            URE_Logger.error('Exception processing config "' + bundle.developerName + '"')
-                .category(URE_Logger.Category.ENGINE)
+            Logger.error('Exception processing config "' + bundle.developerName + '"')
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('processBundle')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)

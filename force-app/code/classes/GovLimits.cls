@@ -1,13 +1,13 @@
 /**
- * URE_GovLimits
+ * GovLimits
  * ─────────────────────────────────────────────────────────────────────────────
  * Point-in-time snapshot of all Apex governor limits for the current transaction.
  * Lightweight utility — Limits.* calls are free (no SOQL, no CPU overhead).
  *
- * Used by URE_Logger to:
+ * Used by Logger to:
  *   - Attach a compact limit summary to log entries
  *   - Emit automatic WARN entries when limits approach threshold
- *   - Populate the URE_Log__c header fields at flush time
+ *   - Populate the Log__c header fields at flush time
  *
  * Design constraints
  *   - No SOQL. No DML. No heap allocations beyond this one object.
@@ -19,7 +19,7 @@
  * Author: routIQ Engineering — CTA-reviewed
  * ─────────────────────────────────────────────────────────────────────────────
  */
-public without sharing class URE_GovLimits {
+public without sharing class GovLimits {
 
     // ─── Raw Limits ───────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ public without sharing class URE_GovLimits {
     public String  capturedAt    { get; private set; }
 
     // ─── Private constructor — use capture() ─────────────────────────────────
-    private URE_GovLimits() {}
+    private GovLimits() {}
 
     // ─── Factory ─────────────────────────────────────────────────────────────
 
@@ -85,10 +85,10 @@ public without sharing class URE_GovLimits {
      * All Limits.* calls are governor-free.
      * No SOQL, no DML, no CPU budget consumed beyond native method calls.
      *
-     * @return  URE_GovLimits  Immutable snapshot.
+     * @return  GovLimits  Immutable snapshot.
      */
-    public static URE_GovLimits capture() {
-        URE_GovLimits s   = new URE_GovLimits();
+    public static GovLimits capture() {
+        GovLimits s   = new GovLimits();
 
         s.soqlUsed        = Limits.getQueries();
         s.soqlLimit       = Limits.getLimitQueries();
@@ -141,7 +141,7 @@ public without sharing class URE_GovLimits {
 
     /**
      * Returns true if any single limit is at or above the given threshold (0–100).
-     * Used by URE_Logger to auto-emit WARN entries before they become failures.
+     * Used by Logger to auto-emit WARN entries before they become failures.
      *
      * @param  thresholdPct  e.g. 70 = warn at 70% consumed.
      * @return Boolean

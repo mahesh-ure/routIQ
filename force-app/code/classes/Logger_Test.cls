@@ -1,12 +1,12 @@
 /**
- * URE_Logger_Test
+ * Logger_Test
  * ─────────────────────────────────────────────────────────────────────────────
- * Apex test class for URE_Logger and URE_GovLimits.
+ * Apex test class for Logger and GovLimits.
  *
  * Coverage targets
- *   URE_Logger      -> all log levels, builder methods, flush, reset,
+ *   Logger      -> all log levels, builder methods, flush, reset,
  *                     buffer cap, level gating, no-op mode
- *   URE_GovLimits   -> capture(), toCompactDisplay(), isApproachingLimit(),
+ *   GovLimits   -> capture(), toCompactDisplay(), isApproachingLimit(),
  *                     toJson(), highWaterMark()
  *
  * Namespace: ure
@@ -14,7 +14,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @IsTest
-private class URE_Logger_Test {
+private class Logger_Test {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -22,21 +22,21 @@ private class URE_Logger_Test {
      * Force the logger into an initialised state without relying on CMDT data.
      * Bypasses loadConfig() by directly setting @TestVisible statics.
      */
-    private static void forceInit(URE_Logger.Level minLevel, Boolean capturePerEntry) {
+    private static void forceInit(Logger.Level minLevel, Boolean capturePerEntry) {
         // Reset first so we start clean
-        URE_Logger.reset();
-        URE_Logger.isEnabled       = true;
-        URE_Logger.isInitialized   = true;
-        URE_Logger.minimumLevel    = minLevel;
-        URE_Logger.capturePerEntry = capturePerEntry;
+        Logger.reset();
+        Logger.isEnabled       = true;
+        Logger.isInitialized   = true;
+        Logger.minimumLevel    = minLevel;
+        Logger.capturePerEntry = capturePerEntry;
     }
 
-    // ─── URE_GovLimits Tests ─────────────────────────────────────────────────
+    // ─── GovLimits Tests ─────────────────────────────────────────────────
 
     @IsTest
     static void govLimits_capture_returnsNonNullSnapshot() {
         Test.startTest();
-        URE_GovLimits snap = URE_GovLimits.capture();
+        GovLimits snap = GovLimits.capture();
         Test.stopTest();
 
         System.assertNotEquals(null, snap, 'Snapshot should not be null');
@@ -49,7 +49,7 @@ private class URE_Logger_Test {
     @IsTest
     static void govLimits_percentages_areCalculated() {
         Test.startTest();
-        URE_GovLimits snap = URE_GovLimits.capture();
+        GovLimits snap = GovLimits.capture();
         Test.stopTest();
 
         System.assert(snap.soqlPct  >= 0 && snap.soqlPct  <= 100, 'SOQL pct out of range');
@@ -60,7 +60,7 @@ private class URE_Logger_Test {
     @IsTest
     static void govLimits_toCompactDisplay_isNotEmpty() {
         Test.startTest();
-        String display = URE_GovLimits.capture().toCompactDisplay();
+        String display = GovLimits.capture().toCompactDisplay();
         Test.stopTest();
 
         System.assert(String.isNotBlank(display), 'Compact display should not be blank');
@@ -73,7 +73,7 @@ private class URE_Logger_Test {
     static void govLimits_isApproachingLimit_falseAtZeroUsage() {
         // Hard to force actual limit usage in a test, but 0% should never exceed any threshold
         Test.startTest();
-        URE_GovLimits snap = URE_GovLimits.capture();
+        GovLimits snap = GovLimits.capture();
         Test.stopTest();
 
         // In a fresh test context limits are near zero — 0% < 70% threshold
@@ -84,7 +84,7 @@ private class URE_Logger_Test {
     @IsTest
     static void govLimits_toJson_isValidJson() {
         Test.startTest();
-        String jsonStr = URE_GovLimits.capture().toJson();
+        String jsonStr = GovLimits.capture().toJson();
         Test.stopTest();
 
         System.assert(String.isNotBlank(jsonStr), 'JSON should not be blank');
@@ -95,120 +95,120 @@ private class URE_Logger_Test {
         System.assert(parsed.containsKey('heap'), 'JSON should contain heap key');
     }
 
-    // ─── URE_Logger — Initialisation Tests ───────────────────────────────────
+    // ─── Logger — Initialisation Tests ───────────────────────────────────
 
     @IsTest
     static void logger_init_setsInitialisedFlag() {
-        URE_Logger.reset();
-        System.assertEquals(false, URE_Logger.isInitialized, 'Should start uninitialised');
+        Logger.reset();
+        System.assertEquals(false, Logger.isInitialized, 'Should start uninitialised');
 
         Test.startTest();
-        forceInit(URE_Logger.Level.DEBUG, false);
+        forceInit(Logger.Level.DEBUG, false);
         Test.stopTest();
 
-        System.assertEquals(true, URE_Logger.isInitialized, 'Should be initialised after forceInit');
+        System.assertEquals(true, Logger.isInitialized, 'Should be initialised after forceInit');
     }
 
     @IsTest
     static void logger_init_isIdempotent() {
-        URE_Logger.reset();
-        forceInit(URE_Logger.Level.DEBUG, false);
+        Logger.reset();
+        forceInit(Logger.Level.DEBUG, false);
 
         // Log one entry
-        URE_Logger.info('First entry').log();
-        Integer countAfterFirst = URE_Logger.getBufferSize();
+        Logger.info('First entry').log();
+        Integer countAfterFirst = Logger.getBufferSize();
 
         // Call init again — should be ignored
-        forceInit(URE_Logger.Level.DEBUG, false);  // re-runs full init path via isInitialized check
+        forceInit(Logger.Level.DEBUG, false);  // re-runs full init path via isInitialized check
         // Actually we need to test the real init path for idempotency
         // Manually call reset to simulate first-time init already happened
         // The second forceInit above would reset our state — test the real init method
-        URE_Logger.reset();
-        URE_Logger.init('LWC', UserInfo.getUserId());
-        URE_Logger.init('REST', UserInfo.getUserId());  // second call — should be no-op
+        Logger.reset();
+        Logger.init('LWC', UserInfo.getUserId());
+        Logger.init('REST', UserInfo.getUserId());  // second call — should be no-op
 
         // If idempotent, buffer should have exactly 1 init entry (not 2)
         // We can't easily count without inserting, but we verify no exception
         System.assert(true, 'Second init call did not throw');
     }
 
-    // ─── URE_Logger — Level Gating Tests ─────────────────────────────────────
+    // ─── Logger — Level Gating Tests ─────────────────────────────────────
 
     @IsTest
     static void logger_infoLevel_suppressesDebugEntries() {
-        forceInit(URE_Logger.Level.INFO, false);
-        Integer before = URE_Logger.getBufferSize();
+        forceInit(Logger.Level.INFO, false);
+        Integer before = Logger.getBufferSize();
 
         Test.startTest();
-        URE_Logger.debug('This should be suppressed').log();
+        Logger.debug('This should be suppressed').log();
         Test.stopTest();
 
-        System.assertEquals(before, URE_Logger.getBufferSize(),
+        System.assertEquals(before, Logger.getBufferSize(),
             'DEBUG entry should be suppressed when minimumLevel=INFO');
     }
 
     @IsTest
     static void logger_infoLevel_allowsInfoEntries() {
-        forceInit(URE_Logger.Level.INFO, false);
-        Integer before = URE_Logger.getBufferSize();
+        forceInit(Logger.Level.INFO, false);
+        Integer before = Logger.getBufferSize();
 
         Test.startTest();
-        URE_Logger.info('This should be buffered').log();
+        Logger.info('This should be buffered').log();
         Test.stopTest();
 
-        System.assertEquals(before + 1, URE_Logger.getBufferSize(),
+        System.assertEquals(before + 1, Logger.getBufferSize(),
             'INFO entry should be buffered when minimumLevel=INFO');
     }
 
     @IsTest
     static void logger_perfLevel_alwaysLogsRegardlessOfMinimumLevel() {
-        forceInit(URE_Logger.Level.FATAL, false); // strictest possible level
-        Integer before = URE_Logger.getBufferSize();
+        forceInit(Logger.Level.FATAL, false); // strictest possible level
+        Integer before = Logger.getBufferSize();
 
         Test.startTest();
-        URE_Logger.perf('PERF should always log').log();
+        Logger.perf('PERF should always log').log();
         Test.stopTest();
 
-        System.assertEquals(before + 1, URE_Logger.getBufferSize(),
+        System.assertEquals(before + 1, Logger.getBufferSize(),
             'PERF level should always be buffered regardless of minimumLevel');
     }
 
     @IsTest
     static void logger_errorLevel_incrementsErrorCount() {
-        forceInit(URE_Logger.Level.DEBUG, false);
-        System.assertEquals(0, URE_Logger.getErrorCount(), 'Error count should start at 0');
+        forceInit(Logger.Level.DEBUG, false);
+        System.assertEquals(0, Logger.getErrorCount(), 'Error count should start at 0');
 
         Test.startTest();
-        URE_Logger.error('Test error').log();
-        URE_Logger.fatal('Test fatal').log();
+        Logger.error('Test error').log();
+        Logger.fatal('Test fatal').log();
         Test.stopTest();
 
-        System.assertEquals(2, URE_Logger.getErrorCount(),
+        System.assertEquals(2, Logger.getErrorCount(),
             'Both ERROR and FATAL should increment error count');
     }
 
     @IsTest
     static void logger_warnLevel_incrementsWarnCount() {
-        forceInit(URE_Logger.Level.DEBUG, false);
-        System.assertEquals(0, URE_Logger.getWarnCount(), 'Warn count should start at 0');
+        forceInit(Logger.Level.DEBUG, false);
+        System.assertEquals(0, Logger.getWarnCount(), 'Warn count should start at 0');
 
         Test.startTest();
-        URE_Logger.warn('Test warning').log();
+        Logger.warn('Test warning').log();
         Test.stopTest();
 
-        System.assertEquals(1, URE_Logger.getWarnCount(),
+        System.assertEquals(1, Logger.getWarnCount(),
             'WARN should increment warn count');
     }
 
-    // ─── URE_Logger — Builder Method Tests ───────────────────────────────────
+    // ─── Logger — Builder Method Tests ───────────────────────────────────
 
     @IsTest
     static void logger_builder_allContextMethodsDoNotThrow() {
-        forceInit(URE_Logger.Level.DEBUG, false);
+        forceInit(Logger.Level.DEBUG, false);
 
         Test.startTest();
-        URE_Logger.info('Full builder test')
-            .category(URE_Logger.Category.ASSIGNMENT)
+        Logger.info('Full builder test')
+            .category(Logger.Category.ASSIGNMENT)
             .inClass('TestClass')
             .inMethod('testMethod')
             .forConfig('TestConfig')
@@ -220,73 +220,73 @@ private class URE_Logger_Test {
             .log();
         Test.stopTest();
 
-        System.assertEquals(1, URE_Logger.getBufferSize(),
+        System.assertEquals(1, Logger.getBufferSize(),
             'One entry should be buffered after full builder chain');
     }
 
     @IsTest
     static void logger_builder_noOpWhenNotInitialised() {
-        URE_Logger.reset();
-        System.assertEquals(false, URE_Logger.isInitialized);
+        Logger.reset();
+        System.assertEquals(false, Logger.isInitialized);
 
         Test.startTest();
         // Should not throw even though logger is not initialised
-        URE_Logger.info('Should be a no-op')
-            .category(URE_Logger.Category.CONFIG)
+        Logger.info('Should be a no-op')
+            .category(Logger.Category.CONFIG)
             .inClass('Test')
             .log();
         Test.stopTest();
 
-        System.assertEquals(0, URE_Logger.getBufferSize(),
+        System.assertEquals(0, Logger.getBufferSize(),
             'Buffer should be empty when logger is not initialised');
     }
 
     @IsTest
     static void logger_builder_forConfig_registersConfig() {
-        forceInit(URE_Logger.Level.DEBUG, false);
+        forceInit(Logger.Level.DEBUG, false);
 
         Test.startTest();
-        URE_Logger.info('Entry for config A').forConfig('Config_A').log();
-        URE_Logger.info('Entry for config B').forConfig('Config_B').log();
+        Logger.info('Entry for config A').forConfig('Config_A').log();
+        Logger.info('Entry for config B').forConfig('Config_B').log();
         Test.stopTest();
 
         // Verify configs are tracked (we check this indirectly via flush)
-        System.assertEquals(2, URE_Logger.getBufferSize(), 'Both entries should be buffered');
+        System.assertEquals(2, Logger.getBufferSize(), 'Both entries should be buffered');
     }
 
-    // ─── URE_Logger — Buffer Cap Tests ───────────────────────────────────────
+    // ─── Logger — Buffer Cap Tests ───────────────────────────────────────
 
     @IsTest
     static void logger_bufferCap_dropsEntriesGracefullyWhenFull() {
-        forceInit(URE_Logger.Level.DEBUG, false);
+        forceInit(Logger.Level.DEBUG, false);
 
         Test.startTest();
         // Fill to cap + 10 — should not throw
-        for (Integer i = 0; i < URE_Logger.MAX_BUFFER_ENTRIES + 10; i++) {
-            URE_Logger.info('Entry ' + i).log();
+        for (Integer i = 0; i < Logger.MAX_BUFFER_ENTRIES + 10; i++) {
+            Logger.info('Entry ' + i).log();
         }
         Test.stopTest();
 
-        System.assertEquals(URE_Logger.MAX_BUFFER_ENTRIES, URE_Logger.getBufferSize(),
+        System.assertEquals(Logger.MAX_BUFFER_ENTRIES, Logger.getBufferSize(),
             'Buffer should be capped at MAX_BUFFER_ENTRIES');
     }
 
-    // ─── URE_Logger — Flush Tests ─────────────────────────────────────────────
+    // ─── Logger — Flush Tests ─────────────────────────────────────────────
 
     @IsTest
     static void logger_flush_insertsLogHeaderAndEntries() {
         // Use real init so CMDT default config is loaded (or defaults apply)
-        URE_Logger.reset();
-        URE_Logger.isEnabled     = true;
-        URE_Logger.isInitialized = true;
-        URE_Logger.minimumLevel  = URE_Logger.Level.DEBUG;
+        Logger.reset();
+        Logger.isEnabled     = true;
+        Logger.isInitialized = true;
+        Logger.minimumLevel  = Logger.Level.DEBUG;
 
-        URE_Logger.info('Test info entry').category(URE_Logger.Category.CANDIDATE).forConfig('TestCfg').forObject('Case').log();
-        URE_Logger.warn('Test warn entry').category(URE_Logger.Category.LOCK).log();
-        URE_Logger.error('Test error entry').category(URE_Logger.Category.ASSIGNMENT).log();
+        Logger.info('Test info entry').category(Logger.Category.CANDIDATE).forConfig('TestCfg').forObject('Case').log();
+        Logger.warn('Test warn entry').category(Logger.Category.LOCK).log();
+        Logger.error('Test error entry').category(Logger.Category.ASSIGNMENT).log();
 
         Test.startTest();
-        URE_Log__c logRecord = URE_Logger.flush('Success');
+        Log__c logRecord = Logger.flush('Success');
         Test.stopTest();
 
         // Verify header inserted
@@ -294,9 +294,9 @@ private class URE_Logger_Test {
         System.assertNotEquals(null, logRecord.Id, 'Log header should have an Id');
 
         // Verify entries inserted
-        List<URE_Log_Entry__c> entries = [
+        List<Log_Entry__c> entries = [
             SELECT Id, Level__c, Category__c, Message__c, Sequence__c
-            FROM URE_Log_Entry__c
+            FROM Log_Entry__c
             WHERE Log__c = :logRecord.Id
             ORDER BY Sequence__c ASC
         ];
@@ -304,7 +304,7 @@ private class URE_Logger_Test {
 
         // Verify at least one ERROR entry exists
         Boolean hasError = false;
-        for (URE_Log_Entry__c e : entries) {
+        for (Log_Entry__c e : entries) {
             if (e.Level__c == 'ERROR') { hasError = true; break; }
         }
         System.assertEquals(true, hasError, 'ERROR entry should be present');
@@ -312,12 +312,12 @@ private class URE_Logger_Test {
 
     @IsTest
     static void logger_flush_returnsNullWhenDisabled() {
-        URE_Logger.reset();
-        URE_Logger.isEnabled     = false;
-        URE_Logger.isInitialized = false;
+        Logger.reset();
+        Logger.isEnabled     = false;
+        Logger.isInitialized = false;
 
         Test.startTest();
-        URE_Log__c result = URE_Logger.flush('Success');
+        Log__c result = Logger.flush('Success');
         Test.stopTest();
 
         System.assertEquals(null, result, 'flush() should return null when logger is disabled');
@@ -325,40 +325,40 @@ private class URE_Logger_Test {
 
     @IsTest
     static void logger_flush_resetsStateAfterFlush() {
-        URE_Logger.reset();
-        URE_Logger.isEnabled     = true;
-        URE_Logger.isInitialized = true;
-        URE_Logger.minimumLevel  = URE_Logger.Level.DEBUG;
+        Logger.reset();
+        Logger.isEnabled     = true;
+        Logger.isInitialized = true;
+        Logger.minimumLevel  = Logger.Level.DEBUG;
 
-        URE_Logger.info('Entry before flush').log();
+        Logger.info('Entry before flush').log();
 
         Test.startTest();
-        URE_Logger.flush('Success');
+        Logger.flush('Success');
         Test.stopTest();
 
         // After flush, isInitialized should be false (reset called internally)
-        System.assertEquals(false, URE_Logger.isInitialized,
+        System.assertEquals(false, Logger.isInitialized,
             'Logger should be reset after flush');
-        System.assertEquals(0, URE_Logger.getBufferSize(),
+        System.assertEquals(0, Logger.getBufferSize(),
             'Buffer should be empty after flush');
     }
 
     @IsTest
     static void logger_flush_setsHasErrorsFlagOnHeader() {
-        URE_Logger.reset();
-        URE_Logger.isEnabled     = true;
-        URE_Logger.isInitialized = true;
-        URE_Logger.minimumLevel  = URE_Logger.Level.DEBUG;
+        Logger.reset();
+        Logger.isEnabled     = true;
+        Logger.isInitialized = true;
+        Logger.minimumLevel  = Logger.Level.DEBUG;
 
-        URE_Logger.error('Deliberate error').log();
+        Logger.error('Deliberate error').log();
 
         Test.startTest();
-        URE_Log__c logRecord = URE_Logger.flush('Failure');
+        Log__c logRecord = Logger.flush('Failure');
         Test.stopTest();
 
-        URE_Log__c requeried = [
+        Log__c requeried = [
             SELECT Has_Errors__c, Error_Count__c, Status__c
-            FROM URE_Log__c
+            FROM Log__c
             WHERE Id = :logRecord.Id
         ];
         System.assertEquals(true,      requeried.Has_Errors__c, 'Has_Errors should be true');
@@ -366,39 +366,39 @@ private class URE_Logger_Test {
         System.assert(requeried.Error_Count__c >= 1,           'Error count should be >= 1');
     }
 
-    // ─── URE_Logger — Category and Level Coverage ─────────────────────────────
+    // ─── Logger — Category and Level Coverage ─────────────────────────────
 
     @IsTest
     static void logger_allLevels_canBeBuffered() {
-        forceInit(URE_Logger.Level.DEBUG, false);
+        forceInit(Logger.Level.DEBUG, false);
 
         Test.startTest();
-        URE_Logger.debug('debug entry').category(URE_Logger.Category.QUERY_BUILD).log();
-        URE_Logger.info ('info entry') .category(URE_Logger.Category.CANDIDATE).log();
-        URE_Logger.warn ('warn entry') .category(URE_Logger.Category.LOCK).log();
-        URE_Logger.error('error entry').category(URE_Logger.Category.ASSIGNMENT).log();
-        URE_Logger.fatal('fatal entry').category(URE_Logger.Category.ENGINE).log();
-        URE_Logger.perf ('perf entry') .category(URE_Logger.Category.PERFORMANCE).log();
+        Logger.debug('debug entry').category(Logger.Category.QUERY_BUILD).log();
+        Logger.info ('info entry') .category(Logger.Category.CANDIDATE).log();
+        Logger.warn ('warn entry') .category(Logger.Category.LOCK).log();
+        Logger.error('error entry').category(Logger.Category.ASSIGNMENT).log();
+        Logger.fatal('fatal entry').category(Logger.Category.ENGINE).log();
+        Logger.perf ('perf entry') .category(Logger.Category.PERFORMANCE).log();
         Test.stopTest();
 
-        System.assertEquals(6, URE_Logger.getBufferSize(),
+        System.assertEquals(6, Logger.getBufferSize(),
             'All 6 log levels should produce buffered entries');
     }
 
     @IsTest
     static void logger_allCategories_areValid() {
-        forceInit(URE_Logger.Level.DEBUG, false);
-        Integer before = URE_Logger.getBufferSize();
+        forceInit(Logger.Level.DEBUG, false);
+        Integer before = Logger.getBufferSize();
 
         Test.startTest();
-        for (URE_Logger.Category cat : URE_Logger.Category.values()) {
-            URE_Logger.info('Testing category ' + cat.name()).category(cat).log();
+        for (Logger.Category cat : Logger.Category.values()) {
+            Logger.info('Testing category ' + cat.name()).category(cat).log();
         }
         Test.stopTest();
 
         System.assertEquals(
-            before + URE_Logger.Category.values().size(),
-            URE_Logger.getBufferSize(),
+            before + Logger.Category.values().size(),
+            Logger.getBufferSize(),
             'One entry per category should be buffered'
         );
     }

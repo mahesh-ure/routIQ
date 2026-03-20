@@ -107,13 +107,13 @@ global with sharing class RoutingService {
                 body, RoutingRequest.class
             );
         } catch (Exception ex) {
-            URE_Logger.init('REST', UserInfo.getUserId());
-            URE_Logger.error('Malformed REST JSON body')
-                .category(URE_Logger.Category.VALIDATION)
+            Logger.init('REST', UserInfo.getUserId());
+            Logger.error('Malformed REST JSON body')
+                .category(Logger.Category.VALIDATION)
                 .inClass('RoutingService').inMethod('routeRecord')
                 .withException(ex)
                 .log();
-            URE_Logger.flush('Failure');
+            Logger.flush('Failure');
             RestContext.response.statusCode = 400;
             return RoutingResult.failure(
                 null,
@@ -187,13 +187,13 @@ global with sharing class RoutingService {
         Id agentUserId = UserInfo.getUserId();
 
         // ── Logger lifecycle: INIT ──────────────────────────────────────
-        URE_Logger.init(entryPoint, agentUserId);
+        Logger.init(entryPoint, agentUserId);
 
-        URE_Logger.info('Routing request received'
+        Logger.info('Routing request received'
                 + ' | object=' + request.objectApiName
                 + ' | recordId=' + request.recordId
                 + ' | config=' + request.configDeveloperName)
-            .category(URE_Logger.Category.ENGINE)
+            .category(Logger.Category.ENGINE)
             .inClass('RoutingService').inMethod('executeSingle')
             .forConfig(request.configDeveloperName)
             .forObject(request.objectApiName)
@@ -215,8 +215,8 @@ global with sharing class RoutingService {
 
         } catch (Exception ex) {
             // Last-resort safety net — defense-in-depth
-            URE_Logger.fatal('Unhandled exception escaped RoutingEngine')
-                .category(URE_Logger.Category.ENGINE)
+            Logger.fatal('Unhandled exception escaped RoutingEngine')
+                .category(Logger.Category.ENGINE)
                 .inClass('RoutingService').inMethod('executeSingle')
                 .withException(ex)
                 .log();
@@ -231,7 +231,7 @@ global with sharing class RoutingService {
             return failResult;
         } finally {
             // ── Logger lifecycle: FLUSH (ALWAYS runs, after all business DML) ──
-            URE_Logger.flush(flushStatus);
+            Logger.flush(flushStatus);
         }
     }
 }
