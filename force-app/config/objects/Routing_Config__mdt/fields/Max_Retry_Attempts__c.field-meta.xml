@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_Retry_Attempts__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>1</defaultValue>
+    <description>Maximum FOR UPDATE lock retry attempts per candidate record. Default 1 (single attempt). Admin-configurable — increase for high-contention environments. Overrides the RetryLockHandler constant.</description>
+    <label>Max Retry Attempts</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

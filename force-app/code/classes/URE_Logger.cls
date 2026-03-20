@@ -99,7 +99,7 @@ public without sharing class URE_Logger {
     public enum Category {
         ENGINE,           // Logger lifecycle (init, flush, config load)
         CONFIG,           // ConfigLoader — CMDT reads and bundle assembly
-        CONDITION_BIND,   // ConditionBinder — STATIC and USER_ATTRIBUTE resolution
+        CONDITION_BIND,   // ConditionBinder — STATIC value resolution (v2: USER_ATTRIBUTE removed)
         QUERY_BUILD,      // DynamicQueryBuilder — SOQL string assembly
         CANDIDATE,        // CandidateSelector — execution + result set analysis
         LOCK,             // RetryLockHandler — FOR UPDATE attempts and outcomes

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Field_API_Name__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>The work record field this capability matches against (e.g. Province__c on Case, Service_Region__c on WorkOrder). Lives on Agent_Match_Condition (not Agent_Capability) so the same capability dimension can map to different field names on different objects.</description>
+    <label>Field API Name</label>
+    <length>255</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

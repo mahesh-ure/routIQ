@@ -3,14 +3,16 @@
  *              and validates bundle integrity before the engine spends SOQL on queries.
  *
  *              This is NOT a post-query in-memory filter — all routing conditions
- *              (STATIC, USER_ATTRIBUTE, all 10 operators) are translated into SOQL
+ *              (STATIC only in v2, all 10 operators) are translated into SOQL
  *              WHERE clauses by DynamicQueryBuilder and evaluated by the database.
  *
  *              RuleEvaluator's responsibility is CONFIG APPLICABILITY:
  *              1. Match request parameters to config definitions (object, config name).
  *              2. Validate each bundle is well-formed before processing.
- *              3. Collect all USER_ATTRIBUTE fields across applicable bundles for a
- *                 single optimized UserAttributeSelector query.
+ *
+ *              v2 change: USER_ATTRIBUTE field collection removed entirely.
+ *              requiredUserFields removed from EvaluationResult. Agent-specific
+ *              filtering is now handled by AgentMatcher, not ConditionBinder.
  *
  *              This keeps RoutingEngine as a pure orchestrator — zero filtering logic,
  *              zero validation logic, just method-to-method wiring.
@@ -25,8 +27,9 @@ public with sharing class RuleEvaluator {
 
     /**
      * @description Result of evaluating all configs against a request.
-     *              Bundles applicable configs, validation failures, and pre-collected
-     *              user attribute fields in a single pass — no redundant iteration.
+     *              Bundles applicable configs and validation failures in a single pass.
+     *
+     *              v2: requiredUserFields removed — no longer needed.
      */
     public class EvaluationResult {
         /** Configs that match the request and passed validation. */
@@ -35,18 +38,10 @@ public with sharing class RuleEvaluator {
         /** Configs that failed validation — logged but not processed. */
         public List<String>       validationWarnings  { get; private set; }
 
-        /**
-         * Aggregated User field API names from USER_ATTRIBUTE conditions across
-         * ALL applicable bundles. Fed to a single UserAttributeSelector.getAttributes()
-         * call — 0 or 1 SOQL for the entire transaction regardless of bundle count.
-         */
-        public Set<String>        requiredUserFields  { get; private set; }
-
         @TestVisible
         private EvaluationResult() {
             this.applicableBundles  = new List<ConfigBundle>();
             this.validationWarnings = new List<String>();
-            this.requiredUserFields = new Set<String>();
         }
     }
 
@@ -57,14 +52,13 @@ public with sharing class RuleEvaluator {
      *              single pass. For each bundle:
      *              1. Checks applicability (object name, config name match).
      *              2. Validates structural integrity (required fields present).
-     *              3. Collects USER_ATTRIBUTE field names for optimized User query.
      *
      *              Bundles that fail validation are excluded and logged as warnings
      *              — they do not halt the routing transaction.
      *
      * @param bundles All active ConfigBundles from ConfigLoader.loadActive()
      * @param request The routing request with optional filter criteria
-     * @return EvaluationResult with applicable bundles, warnings, and user fields
+     * @return EvaluationResult with applicable bundles and warnings
      */
     public static EvaluationResult evaluate(
         List<ConfigBundle> bundles,
@@ -102,14 +96,12 @@ public with sharing class RuleEvaluator {
 
             // ─── Bundle is applicable and valid ───────────────────────────
             result.applicableBundles.add(bundle);
-            collectUserFields(bundle.conditions, result.requiredUserFields);
         }
 
         URE_Logger.debug('Rule evaluation complete | evaluated=' + bundles.size()
                 + ' | applicable=' + result.applicableBundles.size()
                 + ' | skippedNotApplicable=' + skippedNotApplicable
-                + ' | validationWarnings=' + result.validationWarnings.size()
-                + ' | userFields=' + result.requiredUserFields.size())
+                + ' | validationWarnings=' + result.validationWarnings.size())
             .category(URE_Logger.Category.CONDITION_BIND)
             .inClass(CLS).inMethod('evaluate')
             .log();
@@ -157,9 +149,7 @@ public with sharing class RuleEvaluator {
      * @description Validates a ConfigBundle has the minimum required fields to build
      *              a SOQL query and perform assignment. Called BEFORE spending any SOQL.
      *
-     *              This catches bad CMDT configuration early — an admin might deploy a
-     *              config with a blank Object_API_Name__c. Without validation, the engine
-     *              would build malformed SOQL and waste a query.
+     *              v2: USER_ATTRIBUTE validation removed — only STATIC source supported.
      *
      * @param bundle The config to validate
      * @return Empty list if valid. List of error strings if invalid.
@@ -180,7 +170,7 @@ public with sharing class RuleEvaluator {
             errors.add('Candidate_Limit__c must be a positive number.');
         }
 
-        // Validate condition integrity
+        // Validate condition integrity (STATIC only in v2)
         if (bundle.conditions != null) {
             for (Integer i = 0; i < bundle.conditions.size(); i++) {
                 Routing_Condition__mdt cond = bundle.conditions[i];
@@ -191,15 +181,7 @@ public with sharing class RuleEvaluator {
                 if (String.isBlank(cond.Operator__c)) {
                     errors.add('Condition #' + (i + 1) + ': Operator__c is required.');
                 }
-                if (cond.Value_Source__c == 'USER_ATTRIBUTE'
-                    && String.isBlank(cond.User_Attribute_Field__c)
-                ) {
-                    errors.add('Condition #' + (i + 1)
-                        + ': User_Attribute_Field__c is required for USER_ATTRIBUTE source.');
-                }
-                if (cond.Value_Source__c == 'STATIC'
-                    && String.isBlank(cond.Values__c)
-                ) {
+                if (String.isBlank(cond.Values__c)) {
                     errors.add('Condition #' + (i + 1) + ': Values__c is required for STATIC source.');
                 }
             }
@@ -215,23 +197,5 @@ public with sharing class RuleEvaluator {
         }
 
         return errors;
-    }
-
-    // ─── User Field Collection ────────────────────────────────────────────────
-
-    private static void collectUserFields(
-        List<Routing_Condition__mdt> conditions,
-        Set<String> accumulator
-    ) {
-        if (conditions == null) {
-            return;
-        }
-        for (Routing_Condition__mdt cond : conditions) {
-            if (cond.Value_Source__c == 'USER_ATTRIBUTE'
-                && String.isNotBlank(cond.User_Attribute_Field__c)
-            ) {
-                accumulator.add(cond.User_Attribute_Field__c);
-            }
-        }
     }
 }

@@ -1,18 +1,26 @@
 /**
  * @description Orchestrates the record assignment phase of routing: locks a candidate
- *              record, updates its owner field, and returns the outcome.
+ *              record, updates its owner field, increments agent load, and returns the outcome.
+ *
+ *              v2 changes:
+ *              • Status values use consolidated uppercase constants (ASSIGNED, NO_MATCH, etc.)
+ *              • On successful assignment: increments Agent__c.Current_Load__c and sets
+ *                Last_Assigned__c timestamp via a second DML update
+ *              • maxRetryAttempts passed through to RetryLockHandler from ConfigBundle
  *
  *              Security:
  *              • DML uses AccessLevel.USER_MODE — respects CRUD/FLS.
  *              • All SOQL is delegated to AssignmentSelector (bind-variable only, USER_MODE).
  *
  *              Governor awareness:
- *              • 1 DML (update) on success. 0 DML on failure / no-match / contention.
- *              • SOQL cost is bounded by RetryLockHandler (MAX_RETRIES × candidates tried).
+ *              • 1–2 DML (record update + agent load update) on success. 0 DML on failure.
+ *              • SOQL cost is bounded by RetryLockHandler (maxRetries × candidates tried).
  *
  * @group Worker
  */
 public with sharing class AssignmentResolver {
+
+    private static final String CLS = 'AssignmentResolver';
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
 
@@ -123,12 +131,8 @@ public with sharing class AssignmentResolver {
     }
 
     /**
-     * @description Creates a generic failure outcome for engine-level exceptions
-     *              that occur outside the normal assignment flow (e.g. malformed SOQL,
-     *              unexpected exception during condition binding or query building).
-     *
-     *              Public so RoutingEngine can create audit-loggable outcomes for
-     *              any bundle that throws an unexpected exception.
+     * @description Creates a generic failure outcome for engine-level exceptions.
+     *              Public so RoutingEngine can create audit-loggable outcomes.
      *
      * @param errorMessage Description of the failure
      * @return Failure outcome with status 'Failed'
@@ -144,11 +148,46 @@ public with sharing class AssignmentResolver {
         return o;
     }
 
+    /**
+     * @description Creates outcome for capability mismatch failures.
+     *              Public so RoutingEngine can create audit-loggable outcomes.
+     *
+     * @param errorMessage Description of the capability mismatch
+     * @return Failure outcome with status 'Capability_Mismatch'
+     */
+    public static AssignmentOutcome outcomeCapabilityMismatch(String errorMessage) {
+        AssignmentOutcome o = new AssignmentOutcome();
+        o.success = false;
+        o.lockContention = false;
+        o.retryCount = 0;
+        o.candidateCount = 0;
+        o.status = 'Capability_Mismatch';
+        o.errorMessage = errorMessage;
+        return o;
+    }
+
+    /**
+     * @description Creates outcome for capacity exceeded failures.
+     *
+     * @param errorMessage Description of the capacity limit
+     * @return Failure outcome with status 'Capacity_Exceeded'
+     */
+    public static AssignmentOutcome outcomeCapacityExceeded(String errorMessage) {
+        AssignmentOutcome o = new AssignmentOutcome();
+        o.success = false;
+        o.lockContention = false;
+        o.retryCount = 0;
+        o.candidateCount = 0;
+        o.status = 'Capacity_Exceeded';
+        o.errorMessage = errorMessage;
+        return o;
+    }
+
     // ─── Public API ───────────────────────────────────────────────────────────
 
     /**
      * @description Resolves assignment for a single ConfigBundle: checks existing
-     *              assignments, locks a candidate, updates ownership.
+     *              assignments, locks a candidate, updates ownership, increments agent load.
      *
      * @param bundle      The routing config bundle
      * @param candidates  Priority-sorted candidate records from CandidateSelector
@@ -194,11 +233,12 @@ public with sharing class AssignmentResolver {
             }
         }
 
-        // ─── Lock first available candidate ───────────────────────────────
+        // ─── Lock first available candidate (uses config's maxRetryAttempts) ─
         RetryLockHandler.RetryOutcome lockOutcome = RetryLockHandler.lockFirstAvailable(
             bundle.objectApiName,
             bundle.ownerFieldApiName,
-            candidates
+            candidates,
+            bundle.maxRetryAttempts
         );
 
         if (!lockOutcome.success) {
@@ -247,6 +287,9 @@ public with sharing class AssignmentResolver {
                 );
             }
 
+            // ─── Increment agent load + set Last_Assigned__c ────────────
+            incrementAgentLoad(agentUserId);
+
             URE_Logger.info('Assignment succeeded | object=' + bundle.objectApiName
                     + ' | recordId=' + lockedRecord.Id
                     + ' | agent=' + agentUserId
@@ -285,6 +328,49 @@ public with sharing class AssignmentResolver {
     }
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
+
+    /**
+     * @description Increments Agent__c.Current_Load__c by 1 and sets Last_Assigned__c.
+     *              Non-fatal — if the update fails (FLS, agent not found), routing still
+     *              succeeds but a warning is logged.
+     *
+     * @param agentUserId The agent's User Id (used to look up Agent__c)
+     */
+    private static void incrementAgentLoad(Id agentUserId) {
+        try {
+            Map<Id, Agent__c> agentsByUser =
+                AgentCapabilitySelector.getActiveAgentsByUserId();
+            Agent__c agent = agentsByUser.get(agentUserId);
+
+            if (agent == null) {
+                URE_Logger.debug('No Agent__c found for load increment | user=' + agentUserId)
+                    .category(URE_Logger.Category.ASSIGNMENT)
+                    .inClass(CLS).inMethod('incrementAgentLoad')
+                    .log();
+                return;
+            }
+
+            Decimal currentLoad = (agent.Current_Load__c != null) ? agent.Current_Load__c : 0;
+            agent.Current_Load__c = currentLoad + 1;
+            agent.Last_Assigned__c = System.now();
+
+            Database.update(agent, false, AccessLevel.USER_MODE);
+
+            URE_Logger.debug('Agent load incremented | user=' + agentUserId
+                    + ' | newLoad=' + agent.Current_Load__c)
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('incrementAgentLoad')
+                .log();
+
+        } catch (Exception ex) {
+            // Non-fatal — routing succeeded, but load tracking failed
+            URE_Logger.warn('Failed to increment agent load | user=' + agentUserId
+                    + ' | reason=' + ex.getMessage())
+                .category(URE_Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('incrementAgentLoad')
+                .log();
+        }
+    }
 
     /**
      * @description Formats Database.Error list into a single human-readable string

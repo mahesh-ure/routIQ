@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Status__c</fullName>
-    <description>Outcome of the routing attempt.</description>
+    <description>Consolidated outcome of the routing attempt. v2 added Capability_Mismatch and Capacity_Exceeded. Original v1 API names preserved for upgrade safety.</description>
     <externalId>false</externalId>
     <label>Status</label>
     <required>true</required>
@@ -35,6 +35,16 @@
                 <fullName>Retry_Exhausted</fullName>
                 <default>false</default>
                 <label>Retry Exhausted</label>
+            </value>
+            <value>
+                <fullName>Capability_Mismatch</fullName>
+                <default>false</default>
+                <label>Capability Mismatch</label>
+            </value>
+            <value>
+                <fullName>Capacity_Exceeded</fullName>
+                <default>false</default>
+                <label>Capacity Exceeded</label>
             </value>
         </valueSetDefinition>
     </valueSet>
