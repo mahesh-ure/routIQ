@@ -94,9 +94,9 @@ public with sharing class AgentMatcher {
     ) {
         // ─── Guard: no match conditions configured ──────────────────────
         if (matchConditions == null || matchConditions.isEmpty()) {
-            URE_Logger.debug('No match conditions configured — agent auto-qualifies'
+            Logger.debug('No match conditions configured — agent auto-qualifies'
                     + ' | config=' + configDevName)
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
@@ -110,9 +110,9 @@ public with sharing class AgentMatcher {
         Agent__c agent = agentsByUserId.get(agentUserId);
 
         if (agent == null) {
-            URE_Logger.warn('No active Agent__c record found for user='
+            Logger.warn('No active Agent__c record found for user='
                     + agentUserId + ' | config=' + configDevName)
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
@@ -127,10 +127,10 @@ public with sharing class AgentMatcher {
         Decimal maxCapacity = (agent.Max_Capacity__c != null) ? agent.Max_Capacity__c : 0;
 
         if (maxCapacity > 0 && currentLoad >= maxCapacity) {
-            URE_Logger.info('Agent capacity exceeded | agent=' + agentUserId
+            Logger.info('Agent capacity exceeded | agent=' + agentUserId
                     + ' | load=' + currentLoad + '/' + maxCapacity
                     + ' | config=' + configDevName)
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
@@ -163,9 +163,9 @@ public with sharing class AgentMatcher {
             Object fieldValue = safeGetField(workRecord, fieldApiName);
 
             if (fieldValue == null) {
-                URE_Logger.debug('Work record field is null | field=' + fieldApiName
+                Logger.debug('Work record field is null | field=' + fieldApiName
                         + ' | config=' + configDevName + ' — skipping condition')
-                    .category(URE_Logger.Category.ENGINE)
+                    .category(Logger.Category.ENGINE)
                     .inClass(CLS).inMethod('evaluate')
                     .forConfig(configDevName)
                     .log();
@@ -183,11 +183,11 @@ public with sharing class AgentMatcher {
                 String capLabel = resolveCapabilityLabel(cond);
                 missingCaps.put(capLabel, recordValue);
 
-                URE_Logger.debug('Mandatory capability mismatch | capability='
+                Logger.debug('Mandatory capability mismatch | capability='
                         + capDevName + ' | required=' + recordValue
                         + ' | agentValues=' + agentValues
                         + ' | config=' + configDevName)
-                    .category(URE_Logger.Category.ENGINE)
+                    .category(Logger.Category.ENGINE)
                     .inClass(CLS).inMethod('evaluate')
                     .forConfig(configDevName)
                     .log();
@@ -196,20 +196,20 @@ public with sharing class AgentMatcher {
 
         // ─── Result ─────────────────────────────────────────────────────
         if (!missingCaps.isEmpty()) {
-            URE_Logger.warn('Agent failed mandatory capabilities | agent=' + agentUserId
+            Logger.warn('Agent failed mandatory capabilities | agent=' + agentUserId
                     + ' | missing=' + missingCaps.size()
                     + ' | config=' + configDevName)
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
             throw CapabilityMismatchException.create(configDevName, missingCaps);
         }
 
-        URE_Logger.info('Agent qualified | agent=' + agentUserId
+        Logger.info('Agent qualified | agent=' + agentUserId
                 + ' | config=' + configDevName
                 + ' | load=' + currentLoad + '/' + maxCapacity)
-            .category(URE_Logger.Category.ENGINE)
+            .category(Logger.Category.ENGINE)
             .inClass(CLS).inMethod('evaluate')
             .forConfig(configDevName)
             .log();
@@ -249,9 +249,9 @@ public with sharing class AgentMatcher {
         try {
             return record.get(fieldApiName);
         } catch (SObjectException ex) {
-            URE_Logger.debug('Field not available on record | field=' + fieldApiName
+            Logger.debug('Field not available on record | field=' + fieldApiName
                     + ' | reason=' + ex.getMessage())
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('safeGetField')
                 .log();
             return null;

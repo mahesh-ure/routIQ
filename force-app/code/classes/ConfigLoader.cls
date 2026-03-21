@@ -103,8 +103,8 @@ public with sharing class ConfigLoader {
         for (Agent_Match_Condition__mdt mc : allMatchConditions.values()) {
             String parentDevName = configIdToDevName.get(mc.Routing_Config__c);
             if (parentDevName == null) {
-                URE_Logger.debug('Orphan match condition skipped: ' + mc.DeveloperName)
-                    .category(URE_Logger.Category.CONFIG)
+                Logger.debug('Orphan match condition skipped: ' + mc.DeveloperName)
+                    .category(Logger.Category.CONFIG)
                     .inClass(CLS).inMethod('loadActive')
                     .log();
                 continue;

@@ -102,7 +102,7 @@ public with sharing class RuleEvaluator {
                 + ' | applicable=' + result.applicableBundles.size()
                 + ' | skippedNotApplicable=' + skippedNotApplicable
                 + ' | validationWarnings=' + result.validationWarnings.size()
-                + ' | userFields=' + result.requiredUserFields.size())
+                + ' | userFields=0')
             .category(Logger.Category.CONDITION_BIND)
             .inClass(CLS).inMethod('evaluate')
             .log();

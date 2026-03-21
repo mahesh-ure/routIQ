@@ -79,8 +79,8 @@ public with sharing class AgentCapabilitySelector {
             cachedAgents.put(agent.User__c, agent);
         }
 
-        URE_Logger.debug('Active agents loaded | count=' + cachedAgents.size())
-            .category(URE_Logger.Category.ENGINE)
+        Logger.debug('Active agents loaded | count=' + cachedAgents.size())
+            .category(Logger.Category.ENGINE)
             .inClass(CLS).inMethod('getActiveAgentsByUserId')
             .withLimits()
             .log();
@@ -108,9 +108,9 @@ public with sharing class AgentCapabilitySelector {
         cachedCapValues = getFromPlatformCache();
 
         if (cachedCapValues != null) {
-            URE_Logger.debug('Capability values loaded from Platform Cache'
+            Logger.debug('Capability values loaded from Platform Cache'
                     + ' | count=' + cachedCapValues.size())
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('getAllCapabilityValues')
                 .log();
             return cachedCapValues;
@@ -127,9 +127,9 @@ public with sharing class AgentCapabilitySelector {
         // Attempt to warm Platform Cache for next transaction
         putToPlatformCache(cachedCapValues);
 
-        URE_Logger.debug('Capability values loaded from SOQL'
+        Logger.debug('Capability values loaded from SOQL'
                 + ' | count=' + cachedCapValues.size())
-            .category(URE_Logger.Category.ENGINE)
+            .category(Logger.Category.ENGINE)
             .inClass(CLS).inMethod('getAllCapabilityValues')
             .withLimits()
             .log();
@@ -232,9 +232,9 @@ public with sharing class AgentCapabilitySelector {
             }
         } catch (Exception ex) {
             // Cache partition not configured — graceful fallback
-            URE_Logger.debug('Platform Cache unavailable, falling back to SOQL'
+            Logger.debug('Platform Cache unavailable, falling back to SOQL'
                     + ' | reason=' + ex.getMessage())
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('getFromPlatformCache')
                 .log();
         }
@@ -253,8 +253,8 @@ public with sharing class AgentCapabilitySelector {
             }
         } catch (Exception ex) {
             // Non-fatal — cache warming is best-effort
-            URE_Logger.debug('Platform Cache write failed | reason=' + ex.getMessage())
-                .category(URE_Logger.Category.ENGINE)
+            Logger.debug('Platform Cache write failed | reason=' + ex.getMessage())
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('putToPlatformCache')
                 .log();
         }
