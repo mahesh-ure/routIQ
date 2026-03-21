@@ -149,7 +149,7 @@ public with sharing class RetryLockHandler {
             } catch (QueryException qe) {
                 Logger.warn('Lock contention | object=' + objectApiName
                         + ' | Id=' + recordId
-                        + ' | attempt=' + attempts + '/' + MAX_RETRIES)
+                        + ' | attempt=' + attempts + '/' + effectiveMax)
                     .category(Logger.Category.LOCK)
                     .inClass(CLS).inMethod('attemptLock')
                     .forObject(objectApiName)

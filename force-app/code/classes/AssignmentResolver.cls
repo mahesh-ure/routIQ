@@ -340,8 +340,8 @@ public with sharing class AssignmentResolver {
             Agent__c agent = agentsByUser.get(agentUserId);
 
             if (agent == null) {
-                URE_Logger.debug('No Agent__c found for load increment | user=' + agentUserId)
-                    .category(URE_Logger.Category.ASSIGNMENT)
+                Logger.debug('No Agent__c found for load increment | user=' + agentUserId)
+                    .category(Logger.Category.ASSIGNMENT)
                     .inClass(CLS).inMethod('incrementAgentLoad')
                     .log();
                 return;
@@ -353,17 +353,17 @@ public with sharing class AssignmentResolver {
 
             Database.update(agent, false, AccessLevel.USER_MODE);
 
-            URE_Logger.debug('Agent load incremented | user=' + agentUserId
+            Logger.debug('Agent load incremented | user=' + agentUserId
                     + ' | newLoad=' + agent.Current_Load__c)
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('incrementAgentLoad')
                 .log();
 
         } catch (Exception ex) {
             // Non-fatal — routing succeeded, but load tracking failed
-            URE_Logger.warn('Failed to increment agent load | user=' + agentUserId
+            Logger.warn('Failed to increment agent load | user=' + agentUserId
                     + ' | reason=' + ex.getMessage())
-                .category(URE_Logger.Category.ASSIGNMENT)
+                .category(Logger.Category.ASSIGNMENT)
                 .inClass(CLS).inMethod('incrementAgentLoad')
                 .log();
         }

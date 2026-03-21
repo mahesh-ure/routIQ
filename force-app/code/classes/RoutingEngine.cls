@@ -105,8 +105,7 @@ public with sharing class RoutingEngine {
             return RoutingResult.noMatch();
         }
 
-        Logger.info('Applicable configs: ' + evalResult.applicableBundles.size()
-                + ' | userFields: ' + evalResult.requiredUserFields.size())
+        Logger.info('Applicable configs: ' + evalResult.applicableBundles.size())
             .category(Logger.Category.CONFIG)
             .inClass(CLS).inMethod('execute')
             .log();
@@ -118,15 +117,57 @@ public with sharing class RoutingEngine {
             .inClass(CLS).inMethod('execute')
             .log();
 
-        // ─── Phase 4: Pre-load Agent Data (1–2 SOQL, transaction-cached) ─
-        // Eagerly load agents and capabilities ONCE for all bundles.
-        // AgentCapabilitySelector caches results — subsequent calls are free.
-        AgentCapabilitySelector.getActiveAgentsByUserId();
+        // ─── Phase 4: Agent Validation — MANDATORY, fail-closed ───────────
+        // The agent MUST have an active Agent__c record to receive work.
+        // This is the security boundary — no Agent record = no assignment.
+        Map<Id, Agent__c> agentMap =
+            AgentCapabilitySelector.getActiveAgentsByUserId();
+
+        Agent__c currentAgent = agentMap.get(agentUserId);
+
+        if (currentAgent == null) {
+            Logger.warn('Agent gate: no active Agent__c record for user '
+                    + agentUserId)
+                .category(Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('execute')
+                .log();
+            return RoutingResult.failure(
+                request.recordId,
+                'No active Agent record found for the current user. '
+                + 'An administrator must create an Agent record and assign '
+                + 'the required capabilities before routing can proceed.'
+            );
+        }
+
+        // Capacity gate — agent at max load?
+        Decimal currentLoad = currentAgent.Current_Load__c != null
+            ? currentAgent.Current_Load__c : 0;
+        Decimal maxCapacity = currentAgent.Max_Capacity__c != null
+            ? currentAgent.Max_Capacity__c : 0;
+
+        if (maxCapacity > 0 && currentLoad >= maxCapacity) {
+            Logger.warn('Agent gate: capacity exceeded | agent='
+                    + agentUserId + ' | load=' + currentLoad
+                    + ' | max=' + maxCapacity)
+                .category(Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('execute')
+                .log();
+            return RoutingResult.failure(
+                request.recordId,
+                'Agent has reached maximum capacity ('
+                + currentLoad.intValue() + '/' + maxCapacity.intValue()
+                + '). Close or reassign existing items before requesting new work.'
+            );
+        }
+
+        // Pre-load capability values for AgentMatcher (cached, 0-1 SOQL)
         AgentCapabilitySelector.getAllCapabilityValues();
 
-        // ── PERF snapshot: after user attribute query ───────────────────
-        Logger.perf('Phase 4 complete: user attributes fetched'
-                + ' | fieldCount=' + userAttributes.size())
+        // ── PERF snapshot: after agent validation ─────────────────────
+        Logger.perf('Phase 4 complete: agent validated'
+                + ' | agentId=' + currentAgent.Id
+                + ' | load=' + currentLoad + '/' + maxCapacity
+                + ' | totalAgents=' + agentMap.size())
             .category(Logger.Category.PERFORMANCE)
             .inClass(CLS).inMethod('execute')
             .log();
@@ -308,9 +349,9 @@ public with sharing class RoutingEngine {
 
         } catch (CapabilityMismatchException cmEx) {
             // ── v2: Capability or capacity failure — audit and continue ──
-            URE_Logger.warn('Capability/capacity gate failed for config "'
+            Logger.warn('Capability/capacity gate failed for config "'
                     + bundle.developerName + '" | ' + cmEx.getMessage())
-                .category(URE_Logger.Category.ENGINE)
+                .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('processBundle')
                 .forConfig(bundle.developerName)
                 .forObject(bundle.objectApiName)
