@@ -80,8 +80,11 @@ public with sharing class AssignmentResolver {
     /**
      * @description Creates outcome when agent already owns a record
      *              and Allow_Multiple__c is false.
+     *              Public so RoutingEngine can call this from processBundle()
+     *              where Allow_Multiple is checked BEFORE candidate query
+     *              to avoid wasting SOQL.
      */
-    private static AssignmentOutcome outcomeAlreadyAssigned() {
+    public static AssignmentOutcome outcomeAlreadyAssigned() {
         AssignmentOutcome o = new AssignmentOutcome();
         o.success = false;
         o.lockContention = false;
@@ -201,37 +204,16 @@ public with sharing class AssignmentResolver {
     ) {
         // ─── Guard: no candidates ─────────────────────────────────────────
         if (candidates == null || candidates.isEmpty()) {
-            Logger.info('No candidates for assignment'
-                    + ' | config=' + bundle.developerName)
-                .category(Logger.Category.ASSIGNMENT)
-                .inClass(CLS).inMethod('resolve')
-                .forConfig(bundle.developerName)
-                .forObject(bundle.objectApiName)
-                .log();
             return outcomeNoMatch(0);
         }
 
         Integer candidateCount = candidates.size();
 
-        // ─── Guard: Allow_Multiple__c enforcement ─────────────────────────
-        if (!bundle.allowMultiple) {
-            List<SObject> existing = AssignmentSelector.queryOwnedRecords(
-                bundle.objectApiName,
-                bundle.ownerFieldApiName,
-                agentUserId
-            );
-            if (!existing.isEmpty()) {
-                Logger.info('Agent already assigned (Allow_Multiple=false)'
-                        + ' | config=' + bundle.developerName
-                        + ' | agent=' + agentUserId)
-                    .category(Logger.Category.ASSIGNMENT)
-                    .inClass(CLS).inMethod('resolve')
-                    .forConfig(bundle.developerName)
-                    .forObject(bundle.objectApiName)
-                    .log();
-                return outcomeAlreadyAssigned();
-            }
-        }
+        // NOTE: Allow_Multiple__c is enforced by RoutingEngine.processBundle()
+        // BEFORE the candidate query. This saves 1 SOQL when the agent is
+        // already assigned. The check uses dirty reads from prior bundle DML
+        // within the same transaction — atomically correct for per-bundle
+        // enforcement across different object types.
 
         // ─── Lock first available candidate (uses config's maxRetryAttempts) ─
         RetryLockHandler.RetryOutcome lockOutcome = RetryLockHandler.lockFirstAvailable(
@@ -340,10 +322,6 @@ public with sharing class AssignmentResolver {
             Agent__c agent = agentsByUser.get(agentUserId);
 
             if (agent == null) {
-                Logger.debug('No Agent__c found for load increment | user=' + agentUserId)
-                    .category(Logger.Category.ASSIGNMENT)
-                    .inClass(CLS).inMethod('incrementAgentLoad')
-                    .log();
                 return;
             }
 
@@ -352,12 +330,6 @@ public with sharing class AssignmentResolver {
             agent.Last_Assigned__c = System.now();
 
             Database.update(agent, false, AccessLevel.USER_MODE);
-
-            Logger.debug('Agent load incremented | user=' + agentUserId
-                    + ' | newLoad=' + agent.Current_Load__c)
-                .category(Logger.Category.ASSIGNMENT)
-                .inClass(CLS).inMethod('incrementAgentLoad')
-                .log();
 
         } catch (Exception ex) {
             // Non-fatal — routing succeeded, but load tracking failed

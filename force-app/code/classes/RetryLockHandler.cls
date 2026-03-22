@@ -134,16 +134,6 @@ public with sharing class RetryLockHandler {
                     return outcomeRecordGone(attempts);
                 }
 
-                if (attempts > 1) {
-                    Logger.info('Lock acquired after ' + attempts + ' attempts'
-                            + ' | object=' + objectApiName + ' | Id=' + recordId)
-                        .category(Logger.Category.LOCK)
-                        .inClass(CLS).inMethod('attemptLock')
-                        .forObject(objectApiName)
-                        .forRecord(recordId)
-                        .log();
-                }
-
                 return outcomeLocked(locked, attempts);
 
             } catch (QueryException qe) {
@@ -217,14 +207,6 @@ public with sharing class RetryLockHandler {
             if (outcome.success) {
                 return outcomeLocked(outcome.lockedRecord, totalAttempts);
             }
-
-            Logger.info('Skipping candidate ' + candidate.Id
-                    + ' | reason: ' + outcome.errorMessage)
-                .category(Logger.Category.LOCK)
-                .inClass(CLS).inMethod('lockFirstAvailable')
-                .forObject(objectApiName)
-                .forRecord(candidate.Id)
-                .log();
         }
 
         return outcomeExhausted(totalAttempts);

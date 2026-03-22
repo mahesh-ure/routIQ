@@ -94,12 +94,6 @@ public with sharing class AgentMatcher {
     ) {
         // ─── Guard: no match conditions configured ──────────────────────
         if (matchConditions == null || matchConditions.isEmpty()) {
-            Logger.debug('No match conditions configured — agent auto-qualifies'
-                    + ' | config=' + configDevName)
-                .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('evaluate')
-                .forConfig(configDevName)
-                .log();
             return resultNoMatchConditions(agentUserId);
         }
 
@@ -163,12 +157,6 @@ public with sharing class AgentMatcher {
             Object fieldValue = safeGetField(workRecord, fieldApiName);
 
             if (fieldValue == null) {
-                Logger.debug('Work record field is null | field=' + fieldApiName
-                        + ' | config=' + configDevName + ' — skipping condition')
-                    .category(Logger.Category.ENGINE)
-                    .inClass(CLS).inMethod('evaluate')
-                    .forConfig(configDevName)
-                    .log();
                 continue; // Null field on record = condition not applicable
             }
 
@@ -182,15 +170,6 @@ public with sharing class AgentMatcher {
                 // Get human-readable label for error message
                 String capLabel = resolveCapabilityLabel(cond);
                 missingCaps.put(capLabel, recordValue);
-
-                Logger.debug('Mandatory capability mismatch | capability='
-                        + capDevName + ' | required=' + recordValue
-                        + ' | agentValues=' + agentValues
-                        + ' | config=' + configDevName)
-                    .category(Logger.Category.ENGINE)
-                    .inClass(CLS).inMethod('evaluate')
-                    .forConfig(configDevName)
-                    .log();
             }
         }
 
@@ -206,15 +185,71 @@ public with sharing class AgentMatcher {
             throw CapabilityMismatchException.create(configDevName, missingCaps);
         }
 
-        Logger.info('Agent qualified | agent=' + agentUserId
-                + ' | config=' + configDevName
-                + ' | load=' + currentLoad + '/' + maxCapacity)
-            .category(Logger.Category.ENGINE)
-            .inClass(CLS).inMethod('evaluate')
-            .forConfig(configDevName)
-            .log();
-
         return resultMatched(agent);
+    }
+
+    /**
+     * @description Checks whether an agent has at least one capability value for every
+     *              mandatory capability TYPE required by the given match conditions.
+     *
+     *              This is a TYPE-level pre-filter (does agent have "Province" capability?)
+     *              not a VALUE-level check (does agent have "Ontario"?). VALUE matching
+     *              requires a work record and happens later in evaluate().
+     *
+     *              Used by RoutingEngine to eliminate bundles the agent can never satisfy,
+     *              saving SOQL on candidate queries that would inevitably fail.
+     *
+     *              Cost: 0 SOQL — uses transaction-cached capability map.
+     *
+     * @param matchConditions Agent_Match_Condition__mdt list for a config
+     * @param agentUserId    The requesting agent's User Id
+     * @return True if agent has all required capability types (or no mandatory conditions exist)
+     */
+    public static Boolean hasRequiredCapabilityTypes(
+        List<Agent_Match_Condition__mdt> matchConditions,
+        Id agentUserId
+    ) {
+        // No match conditions = agent auto-qualifies at TYPE level
+        if (matchConditions == null || matchConditions.isEmpty()) {
+            return true;
+        }
+
+        // Collect mandatory capability type names
+        List<String> mandatoryTypes = new List<String>();
+        for (Agent_Match_Condition__mdt cond : matchConditions) {
+            if (cond.Is_Mandatory__c == true) {
+                mandatoryTypes.add(resolveCapabilityDevName(cond));
+            }
+        }
+
+        // No mandatory conditions = auto-qualifies
+        if (mandatoryTypes.isEmpty()) {
+            return true;
+        }
+
+        // Load agent data (transaction-cached, 0 SOQL on repeat call)
+        Map<Id, Agent__c> agentsByUserId =
+            AgentCapabilitySelector.getActiveAgentsByUserId();
+        Agent__c agent = agentsByUserId.get(agentUserId);
+        if (agent == null) {
+            return false;
+        }
+
+        Map<Id, Map<String, Set<String>>> capabilityMap =
+            AgentCapabilitySelector.getCapabilityMap();
+        Map<String, Set<String>> agentCaps = capabilityMap.get(agent.Id);
+        if (agentCaps == null || agentCaps.isEmpty()) {
+            return false; // Agent has zero capabilities but config requires matching
+        }
+
+        // Verify agent has each mandatory capability TYPE
+        for (String capType : mandatoryTypes) {
+            if (!agentCaps.containsKey(capType)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // ─── Private Helpers ────────────────────────────────────────────────────
@@ -249,11 +284,6 @@ public with sharing class AgentMatcher {
         try {
             return record.get(fieldApiName);
         } catch (SObjectException ex) {
-            Logger.debug('Field not available on record | field=' + fieldApiName
-                    + ' | reason=' + ex.getMessage())
-                .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('safeGetField')
-                .log();
             return null;
         }
     }

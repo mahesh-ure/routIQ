@@ -79,12 +79,6 @@ public with sharing class AgentCapabilitySelector {
             cachedAgents.put(agent.User__c, agent);
         }
 
-        Logger.debug('Active agents loaded | count=' + cachedAgents.size())
-            .category(Logger.Category.ENGINE)
-            .inClass(CLS).inMethod('getActiveAgentsByUserId')
-            .withLimits()
-            .log();
-
         return cachedAgents;
     }
 
@@ -108,11 +102,6 @@ public with sharing class AgentCapabilitySelector {
         cachedCapValues = getFromPlatformCache();
 
         if (cachedCapValues != null) {
-            Logger.debug('Capability values loaded from Platform Cache'
-                    + ' | count=' + cachedCapValues.size())
-                .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('getAllCapabilityValues')
-                .log();
             return cachedCapValues;
         }
 
@@ -126,13 +115,6 @@ public with sharing class AgentCapabilitySelector {
 
         // Attempt to warm Platform Cache for next transaction
         putToPlatformCache(cachedCapValues);
-
-        Logger.debug('Capability values loaded from SOQL'
-                + ' | count=' + cachedCapValues.size())
-            .category(Logger.Category.ENGINE)
-            .inClass(CLS).inMethod('getAllCapabilityValues')
-            .withLimits()
-            .log();
 
         return cachedCapValues;
     }
@@ -232,11 +214,6 @@ public with sharing class AgentCapabilitySelector {
             }
         } catch (Exception ex) {
             // Cache partition not configured — graceful fallback
-            Logger.debug('Platform Cache unavailable, falling back to SOQL'
-                    + ' | reason=' + ex.getMessage())
-                .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('getFromPlatformCache')
-                .log();
         }
         return null;
     }
@@ -253,10 +230,6 @@ public with sharing class AgentCapabilitySelector {
             }
         } catch (Exception ex) {
             // Non-fatal — cache warming is best-effort
-            Logger.debug('Platform Cache write failed | reason=' + ex.getMessage())
-                .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('putToPlatformCache')
-                .log();
         }
     }
 

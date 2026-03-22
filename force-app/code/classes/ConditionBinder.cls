@@ -45,10 +45,6 @@ public with sharing class ConditionBinder {
         Map<String, Object> bindMap = new Map<String, Object>();
 
         if (conditions == null || conditions.isEmpty()) {
-            Logger.debug('No conditions to resolve — empty bind map')
-                .category(Logger.Category.CONDITION_BIND)
-                .inClass(CLS).inMethod('resolveAll')
-                .log();
             return bindMap;
         }
 
@@ -58,15 +54,6 @@ public with sharing class ConditionBinder {
 
             // Step 1 — Parse STATIC values (comma and semicolon delimited)
             List<String> rawValues = parseDelimited(cond.Values__c);
-
-            Logger.debug('Condition b' + i
-                    + ' | field=' + cond.Field_API_Name__c
-                    + ' | op=' + cond.Operator__c
-                    + ' | type=' + cond.Value_Type__c
-                    + ' | rawCount=' + rawValues.size())
-                .category(Logger.Category.CONDITION_BIND)
-                .inClass(CLS).inMethod('resolveAll')
-                .log();
 
             // Step 2 — Cast to the target type and store in bind map
             String valueType = (String.isNotBlank(cond.Value_Type__c))
@@ -79,12 +66,6 @@ public with sharing class ConditionBinder {
                 bindMap.put(bindKey, castList(rawValues, valueType));
             }
         }
-
-        Logger.debug('Bind resolution complete | conditions=' + conditions.size()
-                + ' | bindKeys=' + bindMap.size())
-            .category(Logger.Category.CONDITION_BIND)
-            .inClass(CLS).inMethod('resolveAll')
-            .log();
 
         return bindMap;
     }
@@ -137,11 +118,6 @@ public with sharing class ConditionBinder {
 
         Object fieldValue = userAttributes.get(cond.User_Attribute_Field__c);
         if (fieldValue == null) {
-            Logger.debug('User attribute is null for field='
-                    + cond.User_Attribute_Field__c + ' — will produce empty bind list')
-                .category(Logger.Category.CONDITION_BIND)
-                .inClass(CLS).inMethod('resolveUserAttribute')
-                .log();
             return result;
         }
 
