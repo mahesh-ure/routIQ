@@ -77,15 +77,6 @@ public with sharing class AuditLogger {
 
         log.Query_Bind_Snapshot__c = sanitizeBindSnapshot(spec);
 
-        Logger.debug('Audit entry created | config=' + bundle.developerName
-                + ' | status=' + outcome.status
-                + ' | recordId=' + outcome.recordId)
-            .category(Logger.Category.AUDIT)
-            .inClass(CLS).inMethod('createEntry')
-            .forConfig(bundle.developerName)
-            .forObject(bundle.objectApiName)
-            .log();
-
         return new AuditEntry(log);
     }
 
@@ -135,13 +126,6 @@ public with sharing class AuditLogger {
                     .log();
             }
         }
-
-        Logger.info('Audit flush complete | inserted=' + successCount
-                + ' | failed=' + failCount)
-            .category(Logger.Category.AUDIT)
-            .inClass(CLS).inMethod('flush')
-            .withLimits()
-            .log();
 
         return logIds;
     }

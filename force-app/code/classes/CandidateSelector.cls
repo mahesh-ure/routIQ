@@ -40,14 +40,6 @@ public with sharing class CandidateSelector {
             .withLimits()
             .log();
 
-        if (results.isEmpty()) {
-            Logger.debug('Zero candidates returned for ' + spec.objectApiName)
-                .category(Logger.Category.CANDIDATE)
-                .inClass(CLS).inMethod('query')
-                .forObject(spec.objectApiName)
-                .log();
-        }
-
         return results;
     }
 }

@@ -119,7 +119,7 @@ public without sharing class Logger {
     @TestVisible private static Boolean           capturePerEntry = false;
 
     private static Long              txStartMs;
-    private static String            transactionId;
+    @TestVisible private static String transactionId;
     private static Id                runningUserId;
     private static String            entryPoint;
 
@@ -355,17 +355,6 @@ public without sharing class Logger {
         configsInvoked  = new Set<String>();
         objectsRouted   = new Set<String>();
         isInitialized   = true;
-
-        // First entry — captures limits right at transaction start
-        info('Logger initialised | txId=' + transactionId
-             + ' | entryPoint=' + ep
-             + ' | user=' + userId
-             + ' | frameworkVersion=' + FRAMEWORK_VERSION)
-            .category(Category.ENGINE)
-            .inClass('Logger')
-            .inMethod('init')
-            .withLimits()
-            .log();
     }
 
     // ─── Log-Level Entry Points ───────────────────────────────────────────────
@@ -618,6 +607,9 @@ public without sharing class Logger {
         transactionId  = null;
         entryPoint     = null;
     }
+
+    /** Transaction Id accessor for merged log entries. */
+    public static String getTransactionId() { return transactionId; }
 
     /** Buffer size accessor for test assertions. */
     @TestVisible

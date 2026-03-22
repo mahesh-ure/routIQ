@@ -37,13 +37,6 @@ public with sharing class ConfigLoader {
         Map<String, Agent_Match_Condition__mdt> allMatchConditions =
             RoutingConfigSelector.getAllMatchConditions();
 
-        Logger.debug('CMDT loaded | configs=' + allConfigs.size()
-                + ' | conditions=' + allConditions.size()
-                + ' | priorities=' + allPriorities.size())
-            .category(Logger.Category.CONFIG)
-            .inClass(CLS).inMethod('loadActive')
-            .log();
-
         // Step 2 — Build reverse map: configId → DeveloperName
         Map<Id, String> configIdToDevName = new Map<Id, String>();
         for (Routing_Config__mdt cfg : allConfigs.values()) {
@@ -61,10 +54,6 @@ public with sharing class ConfigLoader {
 
             String parentDevName = configIdToDevName.get(cond.Routing_Config__c);
             if (parentDevName == null) {
-                Logger.debug('Orphan condition skipped: ' + cond.DeveloperName)
-                    .category(Logger.Category.CONFIG)
-                    .inClass(CLS).inMethod('loadActive')
-                    .log();
                 continue;
             }
 
@@ -103,10 +92,6 @@ public with sharing class ConfigLoader {
         for (Agent_Match_Condition__mdt mc : allMatchConditions.values()) {
             String parentDevName = configIdToDevName.get(mc.Routing_Config__c);
             if (parentDevName == null) {
-                Logger.debug('Orphan match condition skipped: ' + mc.DeveloperName)
-                    .category(Logger.Category.CONFIG)
-                    .inClass(CLS).inMethod('loadActive')
-                    .log();
                 continue;
             }
 
@@ -148,12 +133,6 @@ public with sharing class ConfigLoader {
 
         // Step 7 — Sort bundles by Priority_Weight__c ascending
         bundles.sort();
-
-        Logger.info('Config load complete | activeBundles=' + bundles.size()
-                + ' | skippedInactive=' + skippedInactive)
-            .category(Logger.Category.CONFIG)
-            .inClass(CLS).inMethod('loadActive')
-            .log();
 
         return bundles;
     }

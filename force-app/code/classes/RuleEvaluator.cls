@@ -98,15 +98,6 @@ public with sharing class RuleEvaluator {
             result.applicableBundles.add(bundle);
         }
 
-        Logger.debug('Rule evaluation complete | evaluated=' + bundles.size()
-                + ' | applicable=' + result.applicableBundles.size()
-                + ' | skippedNotApplicable=' + skippedNotApplicable
-                + ' | validationWarnings=' + result.validationWarnings.size()
-                + ' | userFields=0')
-            .category(Logger.Category.CONDITION_BIND)
-            .inClass(CLS).inMethod('evaluate')
-            .log();
-
         return result;
     }
 

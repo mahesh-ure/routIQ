@@ -69,11 +69,8 @@ public with sharing class DynamicQueryBuilder {
 
         soql += ' LIMIT ' + limitValue;
 
-        Logger.debug('SOQL assembled | object=' + fromClause
-                + ' | whereClauses=' + bundle.conditions.size()
-                + ' | orderByClauses=' + (bundle.priorities != null ? bundle.priorities.size() : 0)
-                + ' | limit=' + limitValue
-                + ' | bindKeys=' + binds.size())
+        // ── Log full SOQL query with resolved bind values ─────────────
+        Logger.info('SOQL query | ' + soql + ' | ' + formatBindValues(binds))
             .category(Logger.Category.QUERY_BUILD)
             .inClass(CLS).inMethod('build')
             .forConfig(bundle.developerName)
@@ -207,6 +204,27 @@ public with sharing class DynamicQueryBuilder {
                 return field + ' IN :' + bindKey;
             }
         }
+    }
+
+    // ─── Bind Value Formatting ─────────────────────────────────────────────────
+
+    /**
+     * @description Formats bind map values into a human-readable string for logging.
+     *              Bind values come from CMDT-configured STATIC conditions — safe to log
+     *              (no PII). Example output: b0=[New, Working] | b1=[High, Medium]
+     */
+    private static String formatBindValues(Map<String, Object> binds) {
+        if (binds == null || binds.isEmpty()) {
+            return 'binds=none';
+        }
+        List<String> sortedKeys = new List<String>(binds.keySet());
+        sortedKeys.sort();
+        List<String> parts = new List<String>();
+        for (String key : sortedKeys) {
+            Object val = binds.get(key);
+            parts.add(key + '=' + String.valueOf(val));
+        }
+        return String.join(parts, ' | ');
     }
 
     // ─── ORDER BY ──────────────────────────────────────────────────────────────

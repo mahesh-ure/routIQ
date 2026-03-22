@@ -189,14 +189,19 @@ global with sharing class RoutingService {
         // ── Logger lifecycle: INIT ──────────────────────────────────────
         Logger.init(entryPoint, agentUserId);
 
-        Logger.info('Routing request received'
+        Logger.info('Routing started'
+                + ' | txId=' + Logger.getTransactionId()
+                + ' | entryPoint=' + entryPoint
+                + ' | user=' + agentUserId
                 + ' | object=' + request.objectApiName
                 + ' | recordId=' + request.recordId
-                + ' | config=' + request.configDeveloperName)
+                + ' | config=' + request.configDeveloperName
+                + ' | v=' + Logger.FRAMEWORK_VERSION)
             .category(Logger.Category.ENGINE)
             .inClass('RoutingService').inMethod('executeSingle')
             .forConfig(request.configDeveloperName)
             .forObject(request.objectApiName)
+            .withLimits()
             .log();
 
         String flushStatus = 'Success';
