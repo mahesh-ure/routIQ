@@ -338,22 +338,40 @@ Instead:
 ---
 
 # 19. Repository Structure
-  classes/
-    domain/
-    selector/
-    service/
-    trigger/
-    util/
 
-  lwc/
-  aura/
+Standard Salesforce DX project structure:
 
-  flows/
-  objects/
-  customMetadata/
+```
+routIQ/                              # Project root
+├── .gitignore
+├── .forceignore
+├── sfdx-project.json
+├── config/
+│   └── project-scratch-def.json
+├── scripts/
+│   └── apex/                        # Anonymous Apex scripts
+├── docs/                            # Architecture docs (not deployed)
+├── force-app/
+│   └── main/
+│       └── default/
+│           ├── classes/              # Apex classes + -meta.xml
+│           │   ├── domain/
+│           │   ├── selector/
+│           │   ├── service/
+│           │   ├── trigger/
+│           │   └── util/
+│           ├── triggers/             # Apex triggers + -meta.xml
+│           ├── lwc/                  # Lightning Web Components
+│           ├── aura/                 # Aura (legacy only)
+│           ├── objects/              # Custom Objects + fields
+│           ├── customMetadata/       # Custom Metadata records
+│           ├── permissionsets/       # Permission Sets
+│           ├── labels/               # Custom Labels
+│           └── flows/                # Flows
+```
 
-  permissionsets/
-  labels/
+IMPORTANT: All deployable metadata MUST live under force-app/main/default/.
+This is required for VS Code SFDX deploy/retrieve to work properly.
   
 ---
 

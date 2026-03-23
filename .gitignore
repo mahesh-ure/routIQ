@@ -1,0 +1,30 @@
+# Salesforce DX local files
+.sf/
+.sfdx/
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
+
+# LWC Jest coverage
+coverage/
+
+# Scratch org snapshots
+*.snp
