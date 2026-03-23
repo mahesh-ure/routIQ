@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Bundle_Name__c</fullName>
+    <description>Admin-facing label for this skill bundle. Must be unique across the org. Used in Setup Wizard, assignment UI, and error messages.</description>
+    <externalId>false</externalId>
+    <label>Bundle Name</label>
+    <length>255</length>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>true</unique>
+</CustomField>

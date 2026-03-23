@@ -8,7 +8,7 @@
  *              • Field and object API names come from CMDT (admin-configured, trusted).
  *              • The caller executes the query with AccessLevel.USER_MODE for FLS enforcement.
  *
- *              SOQL structure:
+ *              SOQL structure (ungrouped — backward compatible):
  *                SELECT  {Id, ownerField, selectFields}
  *                FROM    {objectApiName}
  *                WHERE   {condition clauses AND-joined}
@@ -16,6 +16,25 @@
  *                        [AND Id = :recId]
  *                ORDER BY {priority sort specs}
  *                LIMIT   {candidateLimit}
+ *
+ *              SOQL structure (grouped — Condition_Group__c populated):
+ *                SELECT  ...
+ *                FROM    {objectApiName}
+ *                WHERE   {root conditions AND-joined}
+ *                        AND (
+ *                          ({group 1 conditions AND-joined})
+ *                          OR ({group 2 conditions AND-joined})
+ *                        )
+ *                        [AND RecordType.DeveloperName IN :rtFilter]
+ *                        [AND Id = :recId]
+ *                ORDER BY ...
+ *                LIMIT   ...
+ *
+ *              Grouping model:
+ *              • Condition_Group__c = null  → root-level AND (global filter)
+ *              • Condition_Group__c = 1,2…  → AND within group, OR between groups
+ *              • Bind keys (b0, b1…) are always sequential across ALL conditions
+ *                regardless of grouping — ConditionBinder assigns by list index.
  *
  * @group Worker
  */
@@ -119,35 +138,102 @@ public with sharing class DynamicQueryBuilder {
     // ─── WHERE ─────────────────────────────────────────────────────────────────
 
     /**
-     * @description Builds the WHERE clause by AND-joining condition clauses,
-     *              optional record-type filter, and optional single-record scope.
+     * @description Builds the WHERE clause with support for condition grouping.
+     *
+     *              Grouping model (driven by Condition_Group__c on each condition):
+     *              • null/0 → root-level condition, AND-joined globally
+     *              • 1,2,3… → grouped condition, AND-joined within group,
+     *                          OR-joined between groups
+     *
+     *              Final structure:
+     *                root_cond_1 AND root_cond_2
+     *                AND (
+     *                  (group1_cond1 AND group1_cond2)
+     *                  OR (group2_cond1 AND group2_cond2)
+     *                )
+     *                AND RecordType.DeveloperName IN :rtFilter
+     *                AND Id = :recId
+     *
+     *              Backward compatible: when no conditions have Condition_Group__c
+     *              set, all conditions are root-level → pure AND (identical to v1).
+     *
+     *              Bind keys (b0, b1…) are sequential by condition list index —
+     *              same order as ConditionBinder.resolveAll(). Grouping only
+     *              changes WHERE clause assembly, not bind key assignment.
      */
     private static String buildWhere(
         ConfigBundle bundle,
         Map<String, Object> binds,
         String recordId
     ) {
-        List<String> clauses = new List<String>();
+        // ── Separate root vs grouped conditions ─────────────────────────
+        List<String> rootClauses = new List<String>();
+        Map<Decimal, List<String>> groupClauses =
+            new Map<Decimal, List<String>>();
+        List<Decimal> groupKeys = new List<Decimal>();
 
         for (Integer i = 0; i < bundle.conditions.size(); i++) {
             Routing_Condition__mdt cond = bundle.conditions[i];
             String bindKey = 'b' + i;
-            clauses.add(buildConditionClause(cond, bindKey));
+            String clause = buildConditionClause(cond, bindKey);
+
+            Decimal groupNum = cond.Condition_Group__c;
+
+            if (groupNum == null || groupNum == 0) {
+                // Root-level: AND-joined globally
+                rootClauses.add(clause);
+            } else {
+                // Grouped: AND within group, OR between groups
+                if (!groupClauses.containsKey(groupNum)) {
+                    groupClauses.put(groupNum, new List<String>());
+                    groupKeys.add(groupNum);
+                }
+                groupClauses.get(groupNum).add(clause);
+            }
         }
 
-        // Record type filter
+        // ── Record type filter (root level) ─────────────────────────────
         if (!bundle.recordTypeDevNames.isEmpty()) {
             binds.put('rtFilter', bundle.recordTypeDevNames);
-            clauses.add('RecordType.DeveloperName IN :rtFilter');
+            rootClauses.add('RecordType.DeveloperName IN :rtFilter');
         }
 
-        // Single-record scope
+        // ── Single-record scope (root level) ────────────────────────────
         if (String.isNotBlank(recordId)) {
             binds.put('recId', recordId);
-            clauses.add('Id = :recId');
+            rootClauses.add('Id = :recId');
         }
 
-        return String.join(clauses, ' AND ');
+        // ── Assemble final WHERE ────────────────────────────────────────
+        List<String> allParts = new List<String>();
+
+        // Root conditions first (AND-joined)
+        allParts.addAll(rootClauses);
+
+        // Grouped conditions (OR between groups, AND within)
+        if (!groupClauses.isEmpty()) {
+            groupKeys.sort(); // Deterministic group order: 1, 2, 3…
+
+            List<String> orParts = new List<String>();
+            for (Decimal key : groupKeys) {
+                List<String> withinGroup = groupClauses.get(key);
+                if (withinGroup.size() == 1) {
+                    orParts.add(withinGroup[0]);
+                } else {
+                    orParts.add('(' + String.join(withinGroup, ' AND ') + ')');
+                }
+            }
+
+            // Single group: no OR wrapper needed — just add as AND
+            // Multiple groups: wrap in parentheses with OR
+            if (orParts.size() == 1) {
+                allParts.add(orParts[0]);
+            } else {
+                allParts.add('(' + String.join(orParts, ' OR ') + ')');
+            }
+        }
+
+        return String.join(allParts, ' AND ');
     }
 
     /**

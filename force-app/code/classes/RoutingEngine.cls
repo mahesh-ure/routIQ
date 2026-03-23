@@ -137,10 +137,10 @@ public with sharing class RoutingEngine {
             );
         }
 
-        // Pre-load capability data into transaction cache (0–1 SOQL).
+        // Pre-load skill data into transaction cache (2-3 SOQL on first call).
+        // getCapabilityMap() internally loads assignments + bundle entries.
         // Cached for the remainder of this transaction — AgentMatcher
         // and filterByAgentCapabilities() will read from cache (0 SOQL).
-        AgentCapabilitySelector.getAllCapabilityValues();
         Map<Id, Map<String, Set<String>>> capabilityMap =
             AgentCapabilitySelector.getCapabilityMap();
 

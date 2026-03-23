@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Skill_Bundle__c</fullName>
+    <description>Parent skill bundle. Entries cascade delete when the bundle is deleted.</description>
+    <externalId>false</externalId>
+    <label>Skill Bundle</label>
+    <referenceTo>Skill_Bundle__c</referenceTo>
+    <relationshipLabel>Skill Bundle Entries</relationshipLabel>
+    <relationshipName>Skill_Bundle_Entries</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackTrending>false</trackTrending>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

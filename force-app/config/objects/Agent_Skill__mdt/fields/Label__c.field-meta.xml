@@ -2,8 +2,8 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Label__c</fullName>
     <fieldManageability>SubscriberControlled</fieldManageability>
-    <description>Human-readable label shown in Setup Wizard, error messages, and CapabilityMismatchException details. E.g. Province, Language, Product Line.</description>
-    <label>Label</label>
+    <description>Human-readable name for this skill dimension. Displayed in Setup Wizard, error messages, and admin UIs.</description>
+    <label>Skill Label</label>
     <length>255</length>
     <required>true</required>
     <type>Text</type>

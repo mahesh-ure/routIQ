@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Is_Mandatory__c</fullName>
-    <fieldManageability>SubscriberControlled</fieldManageability>
-    <defaultValue>true</defaultValue>
-    <description>True = agent EXCLUDED entirely on mismatch (hard filter). False = optional — mismatch does not disqualify the agent. v2 uses binary match (no scoring). All mandatory conditions must match for an agent to be eligible.</description>
-    <label>Is Mandatory</label>
-    <type>Checkbox</type>
-</CustomField>

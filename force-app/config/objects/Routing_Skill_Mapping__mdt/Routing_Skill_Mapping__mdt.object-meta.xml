@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Maps an Agent Skill dimension to a Routing Config and a specific work record field. Renamed from Agent_Match_Condition__mdt in v6 for clarity. Each record tells the engine: for this routing config, evaluate this skill dimension against this field on the work record. Same skill can map to different fields on different objects (e.g. Province skill maps to Province__c on Case but Service_Region__c on WorkOrder).</description>
+    <label>Routing Skill Mapping</label>
+    <pluralLabel>Routing Skill Mappings</pluralLabel>
+    <visibility>Public</visibility>
+</CustomObject>

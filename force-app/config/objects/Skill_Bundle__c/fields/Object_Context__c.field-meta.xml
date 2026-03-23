@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Object_Context__c</fullName>
+    <description>Informational grouping for admin organization. Indicates the primary object type this bundle is designed for (e.g. Case, Opportunity, Lead). Does NOT restrict which agents can be assigned — a bundle can serve any object type. Used by Setup Wizard for filtering and display.</description>
+    <externalId>false</externalId>
+    <label>Object Context</label>
+    <length>255</length>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

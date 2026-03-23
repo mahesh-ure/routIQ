@@ -43,7 +43,7 @@
     <allowInChatterGroups>false</allowInChatterGroups>
     <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
-    <description>Stores the actual capability values per agent. Replaces Agent_Skill__c from v1. Each record maps an agent to a capability dimension with comma or semicolon delimited values the agent can handle (e.g. Ontario,Quebec for Province capability).</description>
+    <description>One entry per skill dimension per bundle. Defines what values the bundle provides for a given skill (e.g. Province = Ontario,Quebec,BC). Master-Detail child of Skill_Bundle__c — entries cascade delete when the parent bundle is deleted. Introduced in v6 as part of the Skill Bundle pattern.</description>
     <enableActivities>false</enableActivities>
     <enableBulkApi>true</enableBulkApi>
     <enableFeeds>false</enableFeeds>
@@ -53,15 +53,15 @@
     <enableSearch>true</enableSearch>
     <enableSharing>true</enableSharing>
     <enableStreamingApi>true</enableStreamingApi>
-    <externalSharingModel>ReadWrite</externalSharingModel>
-    <label>Agent Capability Value</label>
+    <externalSharingModel>ControlledByParent</externalSharingModel>
+    <label>Skill Bundle Entry</label>
     <nameField>
-        <displayFormat>ACV-{0000000}</displayFormat>
-        <label>Agent Capability Value Number</label>
+        <displayFormat>SBE-{0000000}</displayFormat>
+        <label>Entry Number</label>
         <type>AutoNumber</type>
     </nameField>
-    <pluralLabel>Agent Capability Values</pluralLabel>
+    <pluralLabel>Skill Bundle Entries</pluralLabel>
     <searchLayouts/>
-    <sharingModel>ReadWrite</sharingModel>
+    <sharingModel>ControlledByParent</sharingModel>
     <visibility>Public</visibility>
 </CustomObject>
