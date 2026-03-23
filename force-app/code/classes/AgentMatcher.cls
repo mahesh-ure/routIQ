@@ -1,11 +1,11 @@
 /**
- * @description Core v2 addition. Evaluates whether an agent is eligible to receive a
- *              work record by matching the record's field values against the agent's
- *              capability values.
+ * @description Evaluates whether an agent is eligible to receive a work record by matching
+ *              the record's field values against the agent's skill values resolved via
+ *              the Skill Bundle pattern.
  *
  *              Design: Binary match — agent either qualifies or doesn't. No scoring.
- *              All mandatory Agent_Match_Condition__mdt entries must match for the agent
- *              to be eligible. If NO agent matches all mandatory capabilities, a
+ *              All mandatory Routing_Skill_Mapping__mdt entries must match for the agent
+ *              to be eligible. If NO agent matches all mandatory skills, a
  *              CapabilityMismatchException is thrown with details for admin remediation.
  *
  *              Agent eligibility pipeline:
@@ -14,7 +14,7 @@
  *
  *              Data flow:
  *              RoutingEngine passes the candidate SObject (work record) and the
- *              Agent_Match_Condition__mdt list from ConfigLoader. AgentMatcher reads
+ *              Routing_Skill_Mapping__mdt list from ConfigLoader. AgentMatcher reads
  *              the record's field values, loads agent capabilities from
  *              AgentCapabilitySelector, and returns the qualified Agent__c record.
  *
@@ -73,14 +73,14 @@ public with sharing class AgentMatcher {
      *              Flow:
      *              1. Look up Agent__c for the requesting user
      *              2. Capacity gate: Current_Load__c < Max_Capacity__c
-     *              3. For each mandatory Agent_Match_Condition__mdt:
+     *              3. For each mandatory Routing_Skill_Mapping__mdt:
      *                 a. Read work record field value
      *                 b. Check if agent's capability values contain that value
      *              4. If all mandatory pass → return matched agent
      *              5. If any mandatory fail → throw CapabilityMismatchException
      *
      * @param workRecord       The candidate SObject (e.g. Case with Province__c populated)
-     * @param matchConditions  Agent_Match_Condition__mdt list for this config
+     * @param matchConditions  Routing_Skill_Mapping__mdt list for this config
      * @param agentUserId      The requesting agent's User Id
      * @param configDevName    Config DeveloperName for error messages
      * @return MatchResult with the qualified agent
@@ -88,7 +88,7 @@ public with sharing class AgentMatcher {
      */
     public static MatchResult evaluate(
         SObject workRecord,
-        List<Agent_Match_Condition__mdt> matchConditions,
+        List<Routing_Skill_Mapping__mdt> matchConditions,
         Id agentUserId,
         String configDevName
     ) {
@@ -147,7 +147,7 @@ public with sharing class AgentMatcher {
         // ─── Evaluate mandatory conditions ──────────────────────────────
         Map<String, String> missingCaps = new Map<String, String>();
 
-        for (Agent_Match_Condition__mdt cond : matchConditions) {
+        for (Routing_Skill_Mapping__mdt cond : matchConditions) {
             if (cond.Is_Mandatory__c != true) {
                 continue; // Skip optional conditions in binary match mode
             }
@@ -201,12 +201,12 @@ public with sharing class AgentMatcher {
      *
      *              Cost: 0 SOQL — uses transaction-cached capability map.
      *
-     * @param matchConditions Agent_Match_Condition__mdt list for a config
+     * @param matchConditions Routing_Skill_Mapping__mdt list for a config
      * @param agentUserId    The requesting agent's User Id
      * @return True if agent has all required capability types (or no mandatory conditions exist)
      */
     public static Boolean hasRequiredCapabilityTypes(
-        List<Agent_Match_Condition__mdt> matchConditions,
+        List<Routing_Skill_Mapping__mdt> matchConditions,
         Id agentUserId
     ) {
         // No match conditions = agent auto-qualifies at TYPE level
@@ -216,7 +216,7 @@ public with sharing class AgentMatcher {
 
         // Collect mandatory capability type names
         List<String> mandatoryTypes = new List<String>();
-        for (Agent_Match_Condition__mdt cond : matchConditions) {
+        for (Routing_Skill_Mapping__mdt cond : matchConditions) {
             if (cond.Is_Mandatory__c == true) {
                 mandatoryTypes.add(resolveCapabilityDevName(cond));
             }
@@ -289,32 +289,32 @@ public with sharing class AgentMatcher {
     }
 
     /**
-     * @description Resolves the Agent_Capability__mdt DeveloperName from an
-     *              Agent_Match_Condition__mdt record. Uses the MD relationship field.
+     * @description Resolves the Agent_Skill__mdt DeveloperName from a
+     *              Routing_Skill_Mapping__mdt record. Uses the MD relationship field.
      */
-    private static String resolveCapabilityDevName(Agent_Match_Condition__mdt cond) {
-        // Agent_Capability__c is an MD Relationship field — at runtime it holds the Id
-        // We need to resolve to DeveloperName for map lookup against Agent_Capability_Value__c
-        // The Agent_Capability_Value__c.Agent_Capability__c stores the DeveloperName as text
-        if (cond.Agent_Capability__r != null
-            && String.isNotBlank(cond.Agent_Capability__r.DeveloperName)
+    private static String resolveCapabilityDevName(Routing_Skill_Mapping__mdt cond) {
+        // Agent_Skill__c is an MD Relationship field — at runtime it holds the Id
+        // We need to resolve to DeveloperName for map lookup against Skill_Bundle_Entry__c
+        // The Skill_Bundle_Entry__c.Agent_Skill__c stores the DeveloperName as text
+        if (cond.Agent_Skill__r != null
+            && String.isNotBlank(cond.Agent_Skill__r.DeveloperName)
         ) {
-            return cond.Agent_Capability__r.DeveloperName;
+            return cond.Agent_Skill__r.DeveloperName;
         }
         // Fallback: use the Id as string (less readable but functional)
-        return (cond.Agent_Capability__c != null)
-            ? String.valueOf(cond.Agent_Capability__c)
+        return (cond.Agent_Skill__c != null)
+            ? String.valueOf(cond.Agent_Skill__c)
             : '';
     }
 
     /**
      * @description Resolves the human-readable label for error messages.
      */
-    private static String resolveCapabilityLabel(Agent_Match_Condition__mdt cond) {
-        if (cond.Agent_Capability__r != null
-            && String.isNotBlank(cond.Agent_Capability__r.Label__c)
+    private static String resolveCapabilityLabel(Routing_Skill_Mapping__mdt cond) {
+        if (cond.Agent_Skill__r != null
+            && String.isNotBlank(cond.Agent_Skill__r.Label__c)
         ) {
-            return cond.Agent_Capability__r.Label__c;
+            return cond.Agent_Skill__r.Label__c;
         }
         return resolveCapabilityDevName(cond);
     }

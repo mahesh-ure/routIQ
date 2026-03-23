@@ -5,8 +5,9 @@
  *              This is the ONLY class that reads routing CMDT. All other classes receive
  *              CMDT data via ConfigBundle.
  *
- *              v2: Added Agent_Capability__mdt and Agent_Match_Condition__mdt selectors
- *              for the capability-matching model.
+ *              v6: Renamed Agent_Capability__mdt to Agent_Skill__mdt and
+ *              Agent_Match_Condition__mdt to Routing_Skill_Mapping__mdt for
+ *              admin-intuitive naming as part of the Skill Bundle refactor.
  *
  *              Test isolation: each getter has a @TestVisible mock override. Tests inject
  *              mock CMDT records without deploying metadata or using SOQL.
@@ -25,10 +26,10 @@ public with sharing class RoutingConfigSelector {
     private static Map<String, Routing_Priority__mdt> mockPriorities;
 
     @TestVisible
-    private static Map<String, Agent_Capability__mdt> mockCapabilities;
+    private static Map<String, Agent_Skill__mdt> mockSkills;
 
     @TestVisible
-    private static Map<String, Agent_Match_Condition__mdt> mockMatchConditions;
+    private static Map<String, Routing_Skill_Mapping__mdt> mockSkillMappings;
 
     /**
      * @description Returns all Routing Config records. Zero SOQL — platform-cached.
@@ -64,26 +65,27 @@ public with sharing class RoutingConfigSelector {
     }
 
     /**
-     * @description Returns all Agent Capability records. Zero SOQL — platform-cached.
-     *              v2 addition for capability-matching model.
+     * @description Returns all Agent Skill dimension records. Zero SOQL — platform-cached.
+     *              v6: Renamed from getAllCapabilities() — Agent_Capability__mdt is now Agent_Skill__mdt.
      * @return Map keyed by DeveloperName
      */
-    public static Map<String, Agent_Capability__mdt> getAllCapabilities() {
-        if (Test.isRunningTest() && mockCapabilities != null) {
-            return mockCapabilities;
+    public static Map<String, Agent_Skill__mdt> getAllSkills() {
+        if (Test.isRunningTest() && mockSkills != null) {
+            return mockSkills;
         }
-        return Agent_Capability__mdt.getAll();
+        return Agent_Skill__mdt.getAll();
     }
 
     /**
-     * @description Returns all Agent Match Condition records. Zero SOQL — platform-cached.
-     *              v2 addition for capability-matching model.
+     * @description Returns all Routing Skill Mapping records. Zero SOQL — platform-cached.
+     *              v6: Renamed from getAllMatchConditions() — Agent_Match_Condition__mdt is
+     *              now Routing_Skill_Mapping__mdt.
      * @return Map keyed by DeveloperName
      */
-    public static Map<String, Agent_Match_Condition__mdt> getAllMatchConditions() {
-        if (Test.isRunningTest() && mockMatchConditions != null) {
-            return mockMatchConditions;
+    public static Map<String, Routing_Skill_Mapping__mdt> getAllSkillMappings() {
+        if (Test.isRunningTest() && mockSkillMappings != null) {
+            return mockSkillMappings;
         }
-        return Agent_Match_Condition__mdt.getAll();
+        return Routing_Skill_Mapping__mdt.getAll();
     }
 }

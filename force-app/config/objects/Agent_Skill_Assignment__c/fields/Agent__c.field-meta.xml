@@ -2,12 +2,12 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Agent__c</fullName>
     <deleteConstraint>Restrict</deleteConstraint>
-    <description>Parent Agent record. Each agent can have multiple capability value records (one per capability dimension).</description>
+    <description>The agent receiving this skill bundle. Restrict on delete prevents orphan assignments — agent cannot be deleted while assignments exist.</description>
     <externalId>false</externalId>
     <label>Agent</label>
     <referenceTo>Agent__c</referenceTo>
-    <relationshipLabel>Agent Capability Values</relationshipLabel>
-    <relationshipName>Agent_Capability_Values</relationshipName>
+    <relationshipLabel>Skill Assignments</relationshipLabel>
+    <relationshipName>Skill_Assignments</relationshipName>
     <required>true</required>
     <trackTrending>false</trackTrending>
     <type>Lookup</type>

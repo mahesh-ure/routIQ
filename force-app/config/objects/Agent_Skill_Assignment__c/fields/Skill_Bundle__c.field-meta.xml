@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Skill_Bundle__c</fullName>
+    <deleteConstraint>Restrict</deleteConstraint>
+    <description>The skill bundle assigned to this agent. Restrict on delete prevents orphan assignments — bundle cannot be deleted while agents are assigned to it.</description>
+    <externalId>false</externalId>
+    <label>Skill Bundle</label>
+    <referenceTo>Skill_Bundle__c</referenceTo>
+    <relationshipLabel>Agent Assignments</relationshipLabel>
+    <relationshipName>Agent_Assignments</relationshipName>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>Lookup</type>
+</CustomField>

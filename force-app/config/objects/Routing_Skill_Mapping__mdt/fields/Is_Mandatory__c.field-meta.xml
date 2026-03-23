@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Mandatory__c</fullName>
+    <defaultValue>true</defaultValue>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>When checked, this skill mapping is a hard filter — agents who lack this skill value are excluded. When unchecked, the mapping is informational and does not disqualify agents.</description>
+    <label>Mandatory</label>
+    <type>Checkbox</type>
+</CustomField>

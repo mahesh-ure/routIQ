@@ -11,7 +11,7 @@
  *              using the capability-matching model.
  *
  *              Value parsing supports both comma and semicolon delimiters for consistency
- *              with Agent_Capability_Value__c.Values__c parsing.
+ *              with Skill_Bundle_Entry__c.Values__c parsing.
  *
  *              Type casting is driven by Value_Type__c (String, Number, Boolean, Date, DateTime).
  *              Unparseable values are silently skipped — never throws on bad admin data.
@@ -75,7 +75,7 @@ public with sharing class ConditionBinder {
     /**
      * @description Splits a comma-and-semicolon-delimited string into trimmed,
      *              non-blank values. Supports both separators for consistency with
-     *              Agent_Capability_Value__c parsing.
+     *              Skill_Bundle_Entry__c parsing.
      */
     @TestVisible
     private static List<String> parseDelimited(String value) {

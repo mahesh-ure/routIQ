@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Defines capability dimensions for agents. Each record represents a categorisation axis (e.g. Province, Language, Product Line). Replaces Skill__c from v1. The engine reads work record field values and matches them against agent capability values stored in Agent_Capability_Value__c.</description>
-    <label>Agent Capability</label>
-    <pluralLabel>Agent Capabilities</pluralLabel>
-    <visibility>Public</visibility>
-</CustomObject>

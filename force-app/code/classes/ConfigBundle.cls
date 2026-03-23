@@ -1,6 +1,6 @@
 /**
  * @description Value object that holds a single routing configuration with its associated
- *              conditions, priorities, and v2 match conditions. Created by ConfigLoader —
+ *              conditions, priorities, and v6 skill mappings. Created by ConfigLoader —
  *              one bundle per active Routing_Config__mdt record.
  *
  *              Implements Comparable to allow List<ConfigBundle>.sort() by Priority_Weight__c
@@ -10,8 +10,8 @@
  *              downstream consumers (DynamicQueryBuilder, RoutingEngine, AssignmentResolver,
  *              AgentMatcher) never repeat parsing logic.
  *
- *              v2 additions:
- *              • matchConditions — Agent_Match_Condition__mdt list for AgentMatcher
+ *              v6 changes:
+ *              • matchConditions — Routing_Skill_Mapping__mdt list for AgentMatcher
  *              • maxRetryAttempts — admin-configurable lock retry count (default 1)
  *
  * @group Worker
@@ -23,7 +23,7 @@ public with sharing class ConfigBundle implements Comparable {
     public Routing_Config__mdt config;
     public List<Routing_Condition__mdt> conditions;
     public List<Routing_Priority__mdt> priorities;
-    public List<Agent_Match_Condition__mdt> matchConditions;
+    public List<Routing_Skill_Mapping__mdt> matchConditions;
 
     // ─── Pre-parsed convenience values ───────────────────────────────────────
 
@@ -54,14 +54,14 @@ public with sharing class ConfigBundle implements Comparable {
         Routing_Config__mdt config,
         List<Routing_Condition__mdt> conditions,
         List<Routing_Priority__mdt> priorities,
-        List<Agent_Match_Condition__mdt> matchConditions
+        List<Routing_Skill_Mapping__mdt> matchConditions
     ) {
         this.config = config;
         this.conditions = sortConditions(conditions);
         this.priorities = sortPriorities(priorities);
         this.matchConditions = (matchConditions != null)
             ? matchConditions
-            : new List<Agent_Match_Condition__mdt>();
+            : new List<Routing_Skill_Mapping__mdt>();
 
         this.developerName = config.DeveloperName;
         this.objectApiName = config.Object_API_Name__c;
@@ -88,7 +88,7 @@ public with sharing class ConfigBundle implements Comparable {
         List<Routing_Condition__mdt> conditions,
         List<Routing_Priority__mdt> priorities
     ) {
-        this(config, conditions, priorities, new List<Agent_Match_Condition__mdt>());
+        this(config, conditions, priorities, new List<Routing_Skill_Mapping__mdt>());
     }
 
     // ─── Comparable — sort bundles by Priority_Weight__c ascending ────────────

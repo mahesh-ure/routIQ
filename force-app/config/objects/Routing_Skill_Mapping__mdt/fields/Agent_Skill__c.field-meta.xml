@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agent_Skill__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Which skill dimension to evaluate against agents. References an Agent_Skill__mdt record.</description>
+    <label>Agent Skill</label>
+    <referenceTo>Agent_Skill__mdt</referenceTo>
+    <relationshipLabel>Routing Skill Mappings</relationshipLabel>
+    <relationshipName>Routing_Skill_Mappings</relationshipName>
+    <required>true</required>
+    <type>MetadataRelationship</type>
+    <unique>false</unique>
+</CustomField>

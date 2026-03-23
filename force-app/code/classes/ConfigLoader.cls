@@ -1,14 +1,14 @@
 /**
  * @description Reads all routing CMDT types via RoutingConfigSelector, filters
- *              for active records, groups conditions, priorities, and v2 match
- *              conditions by parent config, and returns a sorted List<ConfigBundle>.
+ *              for active records, groups conditions, priorities, and v6 skill
+ *              mappings by parent config, and returns a sorted List<ConfigBundle>.
  *
  *              Called ONCE per transaction by RoutingEngine. The returned list is the
  *              engine's single source of truth for all routing configuration.
  *
- *              v2 additions:
- *              • Loads Agent_Match_Condition__mdt and groups by parent config
- *              • Includes match conditions in ConfigBundle constructor
+ *              v6 changes:
+ *              • Agent_Match_Condition__mdt renamed to Routing_Skill_Mapping__mdt
+ *              • getAllMatchConditions() renamed to getAllSkillMappings()
  *
  *              Cost: zero SOQL (CMDT.getAll() is platform-cached), minimal CPU
  *              (small CMDT collections, one pass each for grouping).
@@ -21,7 +21,7 @@ public with sharing class ConfigLoader {
 
     /**
      * @description Loads all active routing configurations with their active conditions,
-     *              priority sort specifications, and v2 agent match conditions.
+     *              priority sort specifications, and v6 routing skill mappings.
      *
      * @return Sorted list of ConfigBundles. Empty list if no active configs exist.
      */
@@ -34,10 +34,10 @@ public with sharing class ConfigLoader {
             RoutingConfigSelector.getAllConditions();
         Map<String, Routing_Priority__mdt> allPriorities =
             RoutingConfigSelector.getAllPriorities();
-        Map<String, Agent_Match_Condition__mdt> allMatchConditions =
-            RoutingConfigSelector.getAllMatchConditions();
+        Map<String, Routing_Skill_Mapping__mdt> allSkillMappings =
+            RoutingConfigSelector.getAllSkillMappings();
 
-        // Step 2 — Build reverse map: configId → DeveloperName
+        // Step 2 — Build reverse map: configId -> DeveloperName
         Map<Id, String> configIdToDevName = new Map<Id, String>();
         for (Routing_Config__mdt cfg : allConfigs.values()) {
             configIdToDevName.put(cfg.Id, cfg.DeveloperName);
@@ -85,23 +85,23 @@ public with sharing class ConfigLoader {
             prioritiesByConfig.get(parentDevName).add(pri);
         }
 
-        // Step 5 — Group match conditions by parent config DeveloperName (v2)
-        Map<String, List<Agent_Match_Condition__mdt>> matchConditionsByConfig =
-            new Map<String, List<Agent_Match_Condition__mdt>>();
+        // Step 5 — Group skill mappings by parent config DeveloperName (v6)
+        Map<String, List<Routing_Skill_Mapping__mdt>> skillMappingsByConfig =
+            new Map<String, List<Routing_Skill_Mapping__mdt>>();
 
-        for (Agent_Match_Condition__mdt mc : allMatchConditions.values()) {
-            String parentDevName = configIdToDevName.get(mc.Routing_Config__c);
+        for (Routing_Skill_Mapping__mdt sm : allSkillMappings.values()) {
+            String parentDevName = configIdToDevName.get(sm.Routing_Config__c);
             if (parentDevName == null) {
                 continue;
             }
 
-            if (!matchConditionsByConfig.containsKey(parentDevName)) {
-                matchConditionsByConfig.put(
+            if (!skillMappingsByConfig.containsKey(parentDevName)) {
+                skillMappingsByConfig.put(
                     parentDevName,
-                    new List<Agent_Match_Condition__mdt>()
+                    new List<Routing_Skill_Mapping__mdt>()
                 );
             }
-            matchConditionsByConfig.get(parentDevName).add(mc);
+            skillMappingsByConfig.get(parentDevName).add(sm);
         }
 
         // Step 6 — Build one ConfigBundle per ACTIVE config
@@ -124,11 +124,11 @@ public with sharing class ConfigLoader {
                 ? prioritiesByConfig.get(devName)
                 : new List<Routing_Priority__mdt>();
 
-            List<Agent_Match_Condition__mdt> matchConds = matchConditionsByConfig.containsKey(devName)
-                ? matchConditionsByConfig.get(devName)
-                : new List<Agent_Match_Condition__mdt>();
+            List<Routing_Skill_Mapping__mdt> skillMappings = skillMappingsByConfig.containsKey(devName)
+                ? skillMappingsByConfig.get(devName)
+                : new List<Routing_Skill_Mapping__mdt>();
 
-            bundles.add(new ConfigBundle(cfg, conditions, priorities, matchConds));
+            bundles.add(new ConfigBundle(cfg, conditions, priorities, skillMappings));
         }
 
         // Step 7 — Sort bundles by Priority_Weight__c ascending
