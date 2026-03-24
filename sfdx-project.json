@@ -7,6 +7,10 @@
       "versionName": "Version 1.0",
       "versionNumber": "1.0.0.NEXT",
       "versionDescription": "Universal Routing Engine for Salesforce"
+    },
+    {
+      "path": "unpackaged",
+      "default": false
     }
   ],
   "namespace": "ure",

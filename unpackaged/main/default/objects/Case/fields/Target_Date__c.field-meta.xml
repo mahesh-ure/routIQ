@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Target_Date__c</fullName>
+    <label>Target Date</label>
+    <description>Target resolution/completion date for routing priority ordering. Used by Routing_Priority__mdt to sort candidates by urgency (NULLS LAST).</description>
+    <type>Date</type>
+    <required>false</required>
+    <trackFeedHistory>false</trackFeedHistory>
+    <trackHistory>false</trackHistory>
+</CustomField>
