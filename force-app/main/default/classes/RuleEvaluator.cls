@@ -25,6 +25,11 @@ public with sharing class RuleEvaluator {
 
     private static final String CLS = 'RuleEvaluator';
 
+    // Scalar operators that accept only a single value — mirrors ConditionBinder
+    private static final Set<String> SCALAR_OPERATORS = new Set<String>{
+        'LESS_THAN', 'GREATER_THAN', 'LESS_OR_EQUAL', 'GREATER_OR_EQUAL'
+    };
+
     /**
      * @description Result of evaluating all configs against a request.
      *              Bundles applicable configs and validation failures in a single pass.
@@ -176,6 +181,24 @@ public with sharing class RuleEvaluator {
                 if (String.isBlank(cond.Values__c)) {
                     errors.add('Condition #' + (i + 1) + ': Values__c is required for STATIC source.');
                 }
+
+                // GAP 5: Warn when a scalar operator is paired with multiple values.
+                // Only the first value is used — remaining values are silently ignored.
+                if (String.isNotBlank(cond.Operator__c)
+                    && SCALAR_OPERATORS.contains(cond.Operator__c)
+                    && String.isNotBlank(cond.Values__c)
+                    && cond.Values__c.contains(',')
+                ) {
+                    Logger.warn('Condition #' + (i + 1)
+                            + ': Operator ' + cond.Operator__c
+                            + ' is a scalar operator but Values__c contains multiple'
+                            + ' comma-delimited values — only the first value will be used'
+                            + ' | field=' + cond.Field_API_Name__c)
+                        .category(Logger.Category.VALIDATION)
+                        .inClass(CLS).inMethod('validateBundle')
+                        .forConfig(bundle.developerName)
+                        .log();
+                }
             }
         }
 
@@ -184,6 +207,33 @@ public with sharing class RuleEvaluator {
                 Routing_Priority__mdt pri = bundle.priorities[i];
                 if (String.isBlank(pri.Sort_Field_API_Name__c)) {
                     errors.add('Priority #' + (i + 1) + ': Sort_Field_API_Name__c is required.');
+                }
+            }
+        }
+
+        // GAP 7: Validate Record_Type_Dev_Name__c against target object's RecordTypeInfos.
+        // Some objects (e.g. Task in certain orgs) have no RecordTypes enabled —
+        // routing would silently return zero results if a RecordType filter is configured.
+        if (!bundle.recordTypeDevNames.isEmpty()
+            && String.isNotBlank(bundle.objectApiName)
+        ) {
+            Schema.SObjectType sot = Schema.getGlobalDescribe().get(bundle.objectApiName);
+            if (sot != null) {
+                Map<String, Schema.RecordTypeInfo> rtInfos =
+                    sot.getDescribe().getRecordTypeInfosByDeveloperName();
+                // Salesforce always includes the "Master" RT — real RTs means > 1 entry
+                if (rtInfos.size() <= 1) {
+                    Logger.warn('Record_Type_Dev_Name__c is set but '
+                            + bundle.objectApiName + ' has no Record Types enabled'
+                            + ' — routing query will return zero results'
+                            + ' | config=' + bundle.developerName)
+                        .category(Logger.Category.VALIDATION)
+                        .inClass(CLS).inMethod('validateBundle')
+                        .forConfig(bundle.developerName)
+                        .forObject(bundle.objectApiName)
+                        .log();
+                    errors.add('Record_Type_Dev_Name__c is configured but '
+                        + bundle.objectApiName + ' has no Record Types enabled.');
                 }
             }
         }

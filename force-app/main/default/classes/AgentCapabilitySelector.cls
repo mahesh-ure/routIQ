@@ -203,11 +203,29 @@ public with sharing class AgentCapabilitySelector {
             agentToBundles.get(assignment.Agent__c).add(assignment.Skill_Bundle__c);
         }
 
-        // Step 2: Build bundle -> Map<skillDevName, Set<values>> map
+        // Step 2: Validate Agent_Skill__c text values against Agent_Skill__mdt
+        //         (GAP 2 mitigation — Skill_Bundle_Entry__c.Agent_Skill__c is text,
+        //          not a lookup, so referential integrity is not enforced by the platform)
+        Map<String, Agent_Skill__mdt> validSkills =
+            RoutingConfigSelector.getAllSkills();
+
+        // Step 3: Build bundle -> Map<skillDevName, Set<values>> map
         Map<Id, Map<String, Set<String>>> bundleSkillMap =
             new Map<Id, Map<String, Set<String>>>();
 
         for (Skill_Bundle_Entry__c entry : entries) {
+            // Validate skill reference — warn on orphan text values
+            if (String.isNotBlank(entry.Agent_Skill__c)
+                && !validSkills.containsKey(entry.Agent_Skill__c)
+            ) {
+                Logger.warn('Skill_Bundle_Entry__c references unknown Agent_Skill__mdt'
+                        + ' | Agent_Skill__c=' + entry.Agent_Skill__c
+                        + ' | Entry Id=' + entry.Id
+                        + ' — this entry will not match any routing skill mapping')
+                    .category(Logger.Category.VALIDATION)
+                    .inClass(CLS).inMethod('getCapabilityMap')
+                    .log();
+            }
             if (!bundleSkillMap.containsKey(entry.Skill_Bundle__c)) {
                 bundleSkillMap.put(
                     entry.Skill_Bundle__c,
@@ -224,7 +242,7 @@ public with sharing class AgentCapabilitySelector {
             skillMap.get(entry.Agent_Skill__c).addAll(parsedValues);
         }
 
-        // Step 3: Merge — for each agent, UNION all bundle entries
+        // Step 4: Merge — for each agent, UNION all bundle entries
         Map<Id, Map<String, Set<String>>> result =
             new Map<Id, Map<String, Set<String>>>();
 

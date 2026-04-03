@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Active__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>true</defaultValue>
+    <description>When unchecked, this priority sort specification is excluded from the ORDER BY clause. Allows admins to disable a sort criterion without deleting the record.</description>
+    <label>Active</label>
+    <type>Checkbox</type>
+</CustomField>

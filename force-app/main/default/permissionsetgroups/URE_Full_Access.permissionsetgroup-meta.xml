@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSetGroup xmlns="http://soap.sforce.com/2006/04/metadata">
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>URE Full Access</label>
+    <permissionSets>ure__Agent_Full_Access</permissionSets>
+    <permissionSets>ure__Agent_Skill_Assignments_Full_Access</permissionSets>
+    <permissionSets>ure__Routing_Log_Full_Access</permissionSets>
+    <permissionSets>ure__Skill_Bundle_Entries_Full_Access</permissionSets>
+    <permissionSets>ure__URE_Logs_Full_Access</permissionSets>
+    <status>Updated</status>
+</PermissionSetGroup>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <brand>
+        <headerColor>#B48D3C</headerColor>
+        <shouldOverrideOrgTheme>false</shouldOverrideOrgTheme>
+    </brand>
+    <formFactors>Small</formFactors>
+    <formFactors>Large</formFactors>
+    <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
+    <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
+    <isNavTabPersistenceDisabled>false</isNavTabPersistenceDisabled>
+    <isOmniPinnedViewEnabled>false</isOmniPinnedViewEnabled>
+    <label>Universal Routing Engine</label>
+    <navType>Console</navType>
+    <tabs>Agent__c</tabs>
+    <tabs>Agent_Skill_Assignment__c</tabs>
+    <tabs>Skill_Bundle_Entry__c</tabs>
+    <tabs>Skill_Bundle__c</tabs>
+    <tabs>Log__c</tabs>
+    <tabs>Routing_Log__c</tabs>
+    <tabs>Log_Entry__c</tabs>
+    <uiType>Lightning</uiType>
+    <utilityBar>Universal_Routing_Engine_UtilityBar2</utilityBar>
+    <workspaceConfig>
+        <mappings>
+            <tab>Agent_Skill_Assignment__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Agent__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Log_Entry__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Log__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Routing_Log__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Skill_Bundle_Entry__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Skill_Bundle__c</tab>
+        </mappings>
+    </workspaceConfig>
+</CustomApplication>
