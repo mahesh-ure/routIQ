@@ -66,11 +66,15 @@ public with sharing class ConfigLoader {
             conditionsByConfig.get(parentDevName).add(cond);
         }
 
-        // Step 4 — Group priorities by parent config DeveloperName
+        // Step 4 — Group ACTIVE priorities by parent config DeveloperName
         Map<String, List<Routing_Priority__mdt>> prioritiesByConfig =
             new Map<String, List<Routing_Priority__mdt>>();
 
         for (Routing_Priority__mdt pri : allPriorities.values()) {
+            if (pri.Is_Active__c != true) {
+                continue;
+            }
+
             String parentDevName = configIdToDevName.get(pri.Routing_Config__c);
             if (parentDevName == null) {
                 continue;
