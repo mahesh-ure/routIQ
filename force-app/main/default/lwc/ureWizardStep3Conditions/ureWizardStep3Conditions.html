@@ -1,0 +1,89 @@
+<template>
+    <div class="slds-form slds-form_stacked">
+
+        <!-- ── Loading Fields ────────────────────────────────── -->
+        <template lwc:if={isLoadingFields}>
+            <lightning-spinner
+                alternative-text="Loading fields"
+                size="small">
+            </lightning-spinner>
+        </template>
+
+        <!-- ── Empty State ───────────────────────────────────── -->
+        <template lwc:if={hasFields}>
+            <template lwc:if={hasConditions}>
+                <!-- ── Condition Rows ────────────────────────── -->
+                <template for:each={conditions} for:item="condition">
+                    <div key={condition.id}
+                         class="slds-box slds-box_x-small slds-m-bottom_small slds-theme_default">
+                        <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end">
+
+                            <!-- Field Picker -->
+                            <div class="slds-col slds-size_1-of-3">
+                                <lightning-combobox
+                                    label={label.field}
+                                    value={condition.fieldApiName}
+                                    options={fieldOptions}
+                                    data-id={condition.id}
+                                    onchange={handleFieldChange}>
+                                </lightning-combobox>
+                            </div>
+
+                            <!-- Operator Picker -->
+                            <div class="slds-col slds-size_1-of-4">
+                                <lightning-combobox
+                                    label={label.operator}
+                                    value={condition.operator}
+                                    options={operatorOptions}
+                                    data-id={condition.id}
+                                    onchange={handleOperatorChange}>
+                                </lightning-combobox>
+                            </div>
+
+                            <!-- Values Input -->
+                            <div class="slds-col slds-size_1-of-3">
+                                <lightning-input
+                                    label={label.values}
+                                    value={condition.values}
+                                    placeholder="Comma-separated values"
+                                    data-id={condition.id}
+                                    onchange={handleValuesChange}>
+                                </lightning-input>
+                            </div>
+
+                            <!-- Remove Button -->
+                            <div class="slds-col slds-size_1-of-12">
+                                <lightning-button-icon
+                                    icon-name="utility:delete"
+                                    variant="bare"
+                                    alternative-text={label.remove}
+                                    data-id={condition.id}
+                                    onclick={handleRemoveCondition}>
+                                </lightning-button-icon>
+                            </div>
+
+                        </div>
+                    </div>
+                </template>
+            </template>
+
+            <template lwc:if={hasConditions}>
+            </template>
+
+            <template lwc:else>
+                <div class="slds-illustration slds-illustration_small slds-m-vertical_medium">
+                    <p class="slds-text-body_regular slds-text-color_weak">{label.noConditions}</p>
+                </div>
+            </template>
+
+            <!-- ── Add Condition Button ──────────────────────── -->
+            <lightning-button
+                label={label.add}
+                variant="neutral"
+                icon-name="utility:add"
+                onclick={handleAddCondition}
+                class="slds-m-top_small">
+            </lightning-button>
+        </template>
+    </div>
+</template>

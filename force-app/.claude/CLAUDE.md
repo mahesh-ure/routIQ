@@ -376,100 +376,20 @@ routIQ/                              # Project root
 
 ---
 
-# 19a. Deployment Commands (Quick Reference)
+# 19a. Deployment & Package Delivery
 
-AI agents and developers MUST use these exact commands. Do NOT waste tokens figuring out deploy syntax.
+**All deployment commands, troubleshooting, and managed package delivery workflows are documented in:**
 
-### Deploy Managed Package Source (force-app)
+> **[CLAUDE_DEPLOYMENT.md](CLAUDE_DEPLOYMENT.md)**
 
-```bash
-# Deploy ALL managed package metadata
-sf project deploy start --source-dir force-app/main/default
+AI agents MUST reference `CLAUDE_DEPLOYMENT.md` for deploy commands. Do NOT waste tokens figuring out deploy syntax.
 
-# Deploy a specific Apex class
-sf project deploy start --source-dir force-app/main/default/classes/RoutingEngine.cls
-
-# Deploy a specific LWC
-sf project deploy start --source-dir force-app/main/default/lwc/routingConsole
-
-# Deploy a specific custom object (all fields)
-sf project deploy start --source-dir force-app/main/default/objects/Agent__c
-
-# Deploy a specific field
-sf project deploy start --source-dir force-app/main/default/objects/Agent__c/fields/Is_Active__c.field-meta.xml
-
-# Deploy permission sets
-sf project deploy start --source-dir force-app/main/default/permissionsets
-
-# Deploy custom labels
-sf project deploy start --source-dir force-app/main/default/labels
-```
-
-### Deploy Test/Sample Data (unpackaged)
-
-```bash
-# Deploy ALL test data (CMDT records + Case customizations)
-sf project deploy start --source-dir unpackaged/main/default
-
-# Deploy only custom metadata records
-sf project deploy start --source-dir unpackaged/main/default/customMetadata
-
-# Deploy only Case object customizations
-sf project deploy start --source-dir unpackaged/main/default/objects/Case
-```
-
-### Deploy Multiple Directories at Once
-
-```bash
-# Deploy managed package + test data together
-sf project deploy start --source-dir force-app/main/default --source-dir unpackaged/main/default
-```
-
-### Run Apex Tests
-
-```bash
-# Run a specific test class
-sf apex run test --class-names Logger_Test --result-format human --wait 10
-
-# Run all tests
-sf apex run test --test-level RunLocalTests --result-format human --wait 10
-```
-
-### Execute Anonymous Apex Scripts
-
-```bash
-# Run a setup script
-sf apex run --file scripts/apex/setup_agent.apex
-
-# Run sample data creation
-sf apex run --file scripts/apex/setup_v6_sample_data.apex
-```
-
-### Retrieve from Org
-
-```bash
-# Retrieve all source from org
-sf project retrieve start --source-dir force-app/main/default
-
-# Retrieve a specific class
-sf project retrieve start --source-dir force-app/main/default/classes/RoutingEngine.cls
-```
-
-### Common Deployment Patterns (AI Agent Workflow)
-
-After creating/modifying code, deploy in this order:
-
-1. **Objects first** (dependencies): `sf project deploy start --source-dir force-app/main/default/objects`
-2. **Classes next**: `sf project deploy start --source-dir force-app/main/default/classes`
-3. **LWC last** (depends on Apex): `sf project deploy start --source-dir force-app/main/default/lwc`
-4. **Test data** (if needed): `sf project deploy start --source-dir unpackaged/main/default`
-5. **Run tests**: `sf apex run test --test-level RunLocalTests --result-format human --wait 10`
-
-**IMPORTANT:** When deploying a single file change, always deploy just that file — NOT the entire directory.
-Example: After editing RoutingEngine.cls, deploy ONLY:
-```bash
-sf project deploy start --source-dir force-app/main/default/classes/RoutingEngine.cls
-```
+Key sections in that file:
+- Section 1: Deploy commands (quick reference)
+- Section 2: Deployment order (dependency chain)
+- Section 3: Troubleshooting (source tracking, conflicts, test gotchas)
+- Section 5: Managed package versioning & customer delivery
+- Section 7: Quick reference card
   
 ---
 
@@ -484,10 +404,10 @@ When generating features:
 5 Expose invocable methods
 6 Build LWC UI
 7 Write tests
-8 **Deploy using commands from Section 19a** (deploy only changed files, not entire directories)
+8 **Deploy using commands from [CLAUDE_DEPLOYMENT.md](CLAUDE_DEPLOYMENT.md)** (deploy only changed files, not entire directories)
 9 Run tests to validate
 
-**Deployment rule:** After writing or modifying any file, immediately deploy ONLY that specific file using the exact `sf project deploy start --source-dir <path>` command from Section 19a. Do NOT search for deploy commands, do NOT deploy entire directories for a single file change. This saves tokens and time.
+**Deployment rule:** After writing or modifying any file, immediately deploy ONLY that specific file using the exact commands from `CLAUDE_DEPLOYMENT.md`. Do NOT search for deploy commands, do NOT deploy entire directories for a single file change. This saves tokens and time.
 
 Agents must prefer **extension over modification**.
 

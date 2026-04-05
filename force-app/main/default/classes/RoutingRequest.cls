@@ -40,6 +40,56 @@ global with sharing class RoutingRequest {
     )
     global String contextData;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // P1 ADDITIONS — Layer 0 schema lockdown (declarations only, no logic)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description When true, the engine runs full matching logic and populates
+     *              RoutingResult (including conditionTraces and reasonSummary) but
+     *              skips ALL side effects: no DML, no EventBus.publish(), no
+     *              Routing_Log__c write. Used by the Setup Wizard simulate step
+     *              and the P2 Simulator.
+     *
+     *              Not exposed as @InvocableVariable — simulation is not a Flow
+     *              use case. Set programmatically from LWC/Apex only.
+     */
+    global Boolean dryRun;
+
+    /**
+     * @description When populated, the engine skips candidate ranking and assigns
+     *              directly to the specified Agent__c record. Still validates that
+     *              the agent exists and is not Offline. Used by the Supervisor
+     *              Dashboard manual reassign feature (F3).
+     *
+     *              Not exposed as @InvocableVariable — manual override is a
+     *              supervisor action, not a Flow use case.
+     */
+    global Id overrideAgentId;
+
+    /**
+     * @description Short-form config developer name for the Invocable Action
+     *              (Layer 4, F4). When populated, targets a specific
+     *              Routing_Config__mdt by DeveloperName. When null, the engine
+     *              resolves the config by matching the record's SObject type.
+     *
+     *              Exists alongside configDeveloperName for backward compatibility.
+     *              Layer 2 logic will coalesce: configDevName ?? configDeveloperName.
+     */
+    @InvocableVariable(
+        label='Config Dev Name'
+        description='DeveloperName of a specific Routing Config. Short-form alias for configDeveloperName. When blank, engine resolves by SObject type.'
+        required=false
+    )
+    global String configDevName;
+
+    /**
+     * @description When true, marks this routing request as an escalation path.
+     *              Reserved for P2 Escalation Engine — not used in P1.
+     *              Declared now to avoid schema changes after Layer 1.
+     */
+    global Boolean escalation;
+
     /**
      * @description Validates structural correctness of this request. Does not perform
      *              schema validation (that belongs in the engine layer).

@@ -1,0 +1,193 @@
+<template>
+    <div class="slds-form slds-form_stacked">
+
+        <!-- ── Configuration Summary ─────────────────────────── -->
+        <div class="slds-box slds-box_x-small slds-theme_shade slds-m-bottom_medium">
+            <p class="slds-text-title_caps slds-m-bottom_xx-small">Configuration Summary</p>
+            <p class="slds-text-body_regular">{configSummary}</p>
+            <p class="slds-text-body_small slds-text-color_weak">
+                {conditionCount} conditions, {agentCount} agents
+            </p>
+        </div>
+
+        <!-- ═══ Simulate Section ═══════════════════════════════ -->
+        <div class="slds-section slds-is-open slds-m-bottom_medium">
+            <h3 class="slds-section__title slds-theme_shade">
+                <span class="slds-truncate slds-p-horizontal_small">{label.simResult}</span>
+            </h3>
+            <div class="slds-section__content">
+
+                <!-- Sample Record ID -->
+                <div class="slds-grid slds-gutters slds-wrap slds-grid_vertical-align-end slds-m-bottom_small">
+                    <div class="slds-col slds-size_2-of-3">
+                        <lightning-input
+                            label={label.recordId}
+                            value={sampleRecordId}
+                            placeholder="e.g. 500xx0000001234"
+                            field-level-help={label.recordHelp}
+                            onchange={handleRecordIdChange}>
+                        </lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-3">
+                        <lightning-button
+                            label={label.simulate}
+                            variant="neutral"
+                            icon-name="utility:preview"
+                            onclick={handleSimulate}
+                            disabled={isSimulating}>
+                        </lightning-button>
+                    </div>
+                </div>
+
+                <!-- Simulating Spinner -->
+                <template lwc:if={isSimulating}>
+                    <div class="slds-align_absolute-center slds-m-vertical_medium">
+                        <lightning-spinner
+                            alternative-text={label.simulating}
+                            size="small">
+                        </lightning-spinner>
+                    </div>
+                </template>
+
+                <!-- Simulate Error -->
+                <template lwc:if={hasSimulateError}>
+                    <div class="slds-notify slds-notify_alert slds-alert_error slds-m-vertical_small" role="alert">
+                        <span class="slds-assistive-text">Error</span>
+                        <p>{simulateError}</p>
+                    </div>
+                </template>
+
+                <!-- Simulate Result -->
+                <template lwc:if={hasSimulateResult}>
+                    <div class="slds-box slds-box_x-small slds-m-vertical_small">
+                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+                            <lightning-icon
+                                icon-name={resultIcon}
+                                variant={resultVariant}
+                                size="small"
+                                class="slds-m-right_small">
+                            </lightning-icon>
+                            <div>
+                                <template lwc:if={simulateSuccess}>
+                                    <p class="slds-text-color_success slds-text-heading_small">Match Found</p>
+                                </template>
+                                <template lwc:else>
+                                    <p class="slds-text-color_error slds-text-heading_small">No Match</p>
+                                    <p class="slds-text-body_small">{resultErrorMessage}</p>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Reason Summary -->
+                        <template lwc:if={reasonSummary}>
+                            <p class="slds-text-body_regular slds-m-bottom_small">{reasonSummary}</p>
+                        </template>
+
+                        <!-- Condition Traces Table -->
+                        <template lwc:if={hasTraces}>
+                            <p class="slds-text-title_caps slds-m-bottom_xx-small">{label.traces}</p>
+                            <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                                <thead>
+                                    <tr class="slds-line-height_reset">
+                                        <th scope="col">Field</th>
+                                        <th scope="col">Operator</th>
+                                        <th scope="col">Expected</th>
+                                        <th scope="col">Actual</th>
+                                        <th scope="col">Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={conditionTraces} for:item="trace">
+                                        <tr key={trace.fieldApiName}>
+                                            <td>{trace.fieldApiName}</td>
+                                            <td>{trace.operator}</td>
+                                            <td>{trace.expectedValue}</td>
+                                            <td>{trace.actualValue}</td>
+                                            <td>
+                                                <template lwc:if={trace.passed}>
+                                                    <lightning-icon
+                                                        icon-name="utility:success"
+                                                        variant="success"
+                                                        size="xx-small">
+                                                    </lightning-icon>
+                                                </template>
+                                                <template lwc:else>
+                                                    <lightning-icon
+                                                        icon-name="utility:close"
+                                                        variant="error"
+                                                        size="xx-small">
+                                                    </lightning-icon>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- ═══ Activate Section ═══════════════════════════════ -->
+        <div class="slds-section slds-is-open">
+            <h3 class="slds-section__title slds-theme_shade">
+                <span class="slds-truncate slds-p-horizontal_small">Activate Configuration</span>
+            </h3>
+            <div class="slds-section__content">
+
+                <p class="slds-text-body_regular slds-m-bottom_medium">
+                    Deploy this routing configuration to your org. Custom metadata records will
+                    be created and agent records will be set up.
+                </p>
+
+                <lightning-button
+                    label={label.activate}
+                    variant="brand"
+                    icon-name="utility:upload"
+                    onclick={handleActivate}
+                    disabled={isActivateDisabled}>
+                </lightning-button>
+
+                <!-- Deploy Status -->
+                <template lwc:if={showDeployStatus}>
+                    <div class="slds-m-top_medium">
+
+                        <template lwc:if={isDeploying}>
+                            <div class="slds-grid slds-grid_vertical-align-center">
+                                <lightning-spinner
+                                    alternative-text={label.deploying}
+                                    size="small"
+                                    class="slds-m-right_small">
+                                </lightning-spinner>
+                                <p class="slds-text-body_regular">{deployStatus}</p>
+                            </div>
+                        </template>
+
+                        <template lwc:if={deploySuccess}>
+                            <div class="slds-notify slds-notify_alert slds-alert_success" role="alert">
+                                <lightning-icon
+                                    icon-name="utility:success"
+                                    variant="inverse"
+                                    size="x-small"
+                                    class="slds-m-right_x-small">
+                                </lightning-icon>
+                                <span>{label.success}</span>
+                            </div>
+                        </template>
+
+                        <template lwc:if={hasDeployError}>
+                            <div class="slds-notify slds-notify_alert slds-alert_error slds-m-top_small" role="alert">
+                                <span class="slds-assistive-text">Error</span>
+                                <p>{deployError}</p>
+                            </div>
+                        </template>
+
+                    </div>
+                </template>
+
+            </div>
+        </div>
+
+    </div>
+</template>

@@ -1,0 +1,5 @@
+/* ── Setup Wizard: Parent Layout ───────────────────────────────────────────── */
+
+:host {
+    display: block;
+}

@@ -73,4 +73,332 @@
         <value>Finding next record</value>
     </labels>
 
+    <!-- ── Setup Wizard: Navigation ─────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Setup Wizard main title</shortDescription>
+        <value>routIQ Setup Wizard</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardNext</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Next step button label</shortDescription>
+        <value>Next</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardPrevious</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Previous step button label</shortDescription>
+        <value>Previous</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardFinish</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Finish/activate button label</shortDescription>
+        <value>Activate</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardCancel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Cancel wizard button label</shortDescription>
+        <value>Cancel</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step Titles ──────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardStep1Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step 1 title - Object selection</shortDescription>
+        <value>Select Object</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardStep2Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step 2 title - Configuration</shortDescription>
+        <value>Configure Routing</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardStep3Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step 3 title - Conditions</shortDescription>
+        <value>Define Conditions</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardStep4Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step 4 title - Agent assignment</shortDescription>
+        <value>Assign Agents</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardStep5Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step 5 title - Simulate and activate</shortDescription>
+        <value>Simulate &amp; Activate</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step 1 ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardObjectLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object API name input label</shortDescription>
+        <value>Object API Name</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardObjectPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object API name placeholder text</shortDescription>
+        <value>e.g. Case, Opportunity, Loan_Application__c</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardObjectHelp</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object selection help text</shortDescription>
+        <value>Enter the API name of the Salesforce object you want to route. This object must be accessible to you.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardObjectValid</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object validated message</shortDescription>
+        <value>Object validated successfully.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardObjectInvalid</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object invalid error message</shortDescription>
+        <value>This object does not exist or is not accessible.</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step 2 ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardConfigNameLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Config name input label</shortDescription>
+        <value>Configuration Name</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardOwnerFieldLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Owner field input label</shortDescription>
+        <value>Owner Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSlaFieldLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA deadline field input label</shortDescription>
+        <value>SLA Deadline Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardMaxCapacityLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Max capacity input label</shortDescription>
+        <value>Max Capacity per Agent</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardIncludeBusyLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Include busy agents toggle label</shortDescription>
+        <value>Include Busy Agents</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step 3 ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardAddCondition</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Add condition button label</shortDescription>
+        <value>Add Condition</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRemoveCondition</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Remove condition button label</shortDescription>
+        <value>Remove</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardFieldLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition field picklist label</shortDescription>
+        <value>Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardOperatorLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition operator picklist label</shortDescription>
+        <value>Operator</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardValuesLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition values input label</shortDescription>
+        <value>Values</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardNoConditions</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state for conditions</shortDescription>
+        <value>No conditions defined. Add at least one condition to filter which records are routed.</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step 4 ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardSelectAgents</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent selection instruction</shortDescription>
+        <value>Select agents who will receive routed records. Skill badges are derived from your conditions in Step 3.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardNoAgents</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No agents available message</shortDescription>
+        <value>No active agents found. Create Agent records before assigning routing.</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Step 5 ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardSimulate</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Simulate button label</shortDescription>
+        <value>Simulate</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRecordIdLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Sample record ID input label</shortDescription>
+        <value>Sample Record ID</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRecordIdHelp</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Sample record ID help text</shortDescription>
+        <value>Enter the ID of an existing record to test your routing configuration. No changes will be made.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSimulationResult</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Simulation results section title</shortDescription>
+        <value>Simulation Results</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardConditionTraces</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition traces section title</shortDescription>
+        <value>Condition Evaluation Details</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeploying</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deploying status message</shortDescription>
+        <value>Deploying configuration...</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeploySuccess</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deploy success message</shortDescription>
+        <value>Configuration activated successfully!</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeployFailed</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deploy failure message</shortDescription>
+        <value>Deployment failed. Check the error details below.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSimulating</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text during simulation</shortDescription>
+        <value>Running simulation</value>
+    </labels>
+
+    <!-- ── Setup Wizard: Shared ───────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WizardRequired</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Required field validation message</shortDescription>
+        <value>This field is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardStepOf</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Step progress indicator (e.g. Step 1 of 5)</shortDescription>
+        <value>Step {0} of {1}</value>
+    </labels>
+
 </CustomLabels>

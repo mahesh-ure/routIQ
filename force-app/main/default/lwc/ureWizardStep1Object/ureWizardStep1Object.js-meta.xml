@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>false</isExposed>
+    <masterLabel>Wizard Step 1 - Object</masterLabel>
+    <description>Step 1 of the routIQ Setup Wizard: SObject picker with API name validation.</description>
+</LightningComponentBundle>

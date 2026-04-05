@@ -1,0 +1,100 @@
+<template>
+    <div class="slds-form slds-form_stacked">
+
+        <!-- ── Instructions ──────────────────────────────────── -->
+        <p class="slds-text-body_regular slds-m-bottom_medium">{label.selectAgents}</p>
+
+        <!-- ── Skill Badges from Step 3 ──────────────────────── -->
+        <template lwc:if={hasSkillBadges}>
+            <div class="slds-m-bottom_medium">
+                <p class="slds-text-title_caps slds-m-bottom_xx-small">Required Skills</p>
+                <template for:each={skillBadges} for:item="badge">
+                    <lightning-badge
+                        key={badge.key}
+                        label={badge.label}
+                        class="slds-m-right_x-small slds-m-bottom_xx-small">
+                    </lightning-badge>
+                </template>
+            </div>
+        </template>
+
+        <!-- ── Loading ───────────────────────────────────────── -->
+        <template lwc:if={isLoading}>
+            <lightning-spinner
+                alternative-text="Loading agents"
+                size="small">
+            </lightning-spinner>
+        </template>
+
+        <!-- ── Error ─────────────────────────────────────────── -->
+        <template lwc:if={hasError}>
+            <div class="slds-text-color_error slds-m-bottom_small">{error}</div>
+        </template>
+
+        <!-- ── Agent List ────────────────────────────────────── -->
+        <template lwc:if={hasAgents}>
+            <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
+                <p class="slds-text-body_small slds-text-color_weak">{selectionSummary}</p>
+                <div>
+                    <lightning-button
+                        label="Select All"
+                        variant="neutral"
+                        onclick={handleSelectAll}
+                        class="slds-m-right_xx-small">
+                    </lightning-button>
+                    <lightning-button
+                        label="Deselect All"
+                        variant="neutral"
+                        onclick={handleDeselectAll}>
+                    </lightning-button>
+                </div>
+            </div>
+
+            <div class="slds-scrollable_y" style="max-height: 400px;">
+                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                    <thead>
+                        <tr class="slds-line-height_reset">
+                            <th scope="col" style="width: 3rem;"></th>
+                            <th scope="col">Agent Name</th>
+                            <th scope="col">Email</th>
+                            <th scope="col">Capacity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={agents} for:item="agent">
+                            <tr key={agent.userId}>
+                                <td>
+                                    <lightning-input
+                                        type="checkbox"
+                                        checked={agent.selected}
+                                        data-userid={agent.userId}
+                                        onchange={handleAgentToggle}
+                                        variant="label-hidden"
+                                        label="Select agent">
+                                    </lightning-input>
+                                </td>
+                                <td>{agent.userName}</td>
+                                <td>{agent.userEmail}</td>
+                                <td>{agent.capacityDisplay}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+
+        <!-- ── No Agents ─────────────────────────────────────── -->
+        <template lwc:if={hasAgents}>
+        </template>
+        <template lwc:else>
+            <template lwc:if={isLoading}>
+            </template>
+            <template lwc:else>
+                <div class="slds-illustration slds-illustration_small slds-m-vertical_medium">
+                    <p class="slds-text-body_regular slds-text-color_weak">{label.noAgents}</p>
+                </div>
+            </template>
+        </template>
+
+    </div>
+</template>

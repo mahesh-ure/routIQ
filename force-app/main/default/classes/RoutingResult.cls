@@ -48,6 +48,39 @@ global with sharing class RoutingResult {
     @InvocableVariable(label='Retry Count' description='Number of FOR UPDATE lock retries before resolution' required=false)
     global Integer retryCount;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // P1 ADDITIONS — Layer 0 schema lockdown (declarations only, no logic)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description Human-readable summary of the routing decision. Examples:
+     *              "Assigned to [Agent Name] — 2 of 2 conditions matched, capacity 3/5,
+     *               SLA proximity rank 1."
+     *              "No match — 0 agents hold all required capabilities."
+     *
+     *              Populated by RoutingEngine during Layer 2 for all outcomes
+     *              (ASSIGNED, NO_MATCH, DEFERRED). Used by the Setup Wizard simulate
+     *              step and the Supervisor Dashboard.
+     */
+    @AuraEnabled
+    global String reasonSummary;
+
+    /**
+     * @description Ordered list of condition evaluation traces. One entry per
+     *              Routing_Condition__mdt evaluated during matching. Populated
+     *              regardless of dryRun — always available for debugging.
+     *
+     *              Used by:
+     *              - Setup Wizard simulate step (Layer 7 — dryRun display)
+     *              - P2 Simulator (future)
+     *              - Supervisor Dashboard routing detail view
+     *
+     *              Not exposed as @InvocableVariable — List of custom types is
+     *              not serializable in Flow. Access via Apex or LWC only.
+     */
+    @AuraEnabled
+    global List<RoutingConditionTrace> conditionTraces;
+
     // ─── Private constructor — use factory methods ───────────────────────────
 
     @TestVisible
