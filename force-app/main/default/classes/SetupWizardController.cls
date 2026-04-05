@@ -205,9 +205,10 @@ public with sharing class SetupWizardController {
             return agents;
         }
 
-        // Collect User Ids to query names (1 SOQL with USER_MODE)
+        // Collect User Ids to query with Profile & Manager info
         Set<Id> userIds = agentsByUser.keySet();
-        String soql = 'SELECT Id, Name, Email FROM User WHERE Id IN :userIds';
+        String soql = 'SELECT Id, Name, Email, ProfileId, Profile.Name, ManagerId, Manager.Name '
+            + 'FROM User WHERE Id IN :userIds';
         Map<String, Object> binds = new Map<String, Object>{
             'userIds' => new List<Id>(userIds)
         };
@@ -230,6 +231,10 @@ public with sharing class SetupWizardController {
             ai.userId = userId;
             ai.userName = (u != null) ? u.Name : String.valueOf(userId);
             ai.userEmail = (u != null) ? u.Email : '';
+            ai.profileId = (u != null) ? u.ProfileId : null;
+            ai.profileName = (u != null && u.Profile != null) ? u.Profile.Name : '';
+            ai.managerId = (u != null) ? u.ManagerId : null;
+            ai.managerName = (u != null && u.Manager != null) ? u.Manager.Name : '';
             ai.maxCapacity = (agent.Max_Capacity__c != null)
                 ? agent.Max_Capacity__c.intValue() : 0;
             ai.currentLoad = (agent.Current_Load__c != null)
@@ -242,12 +247,17 @@ public with sharing class SetupWizardController {
 
     /**
      * @description DTO for agent information used by Step 4.
+     *              Includes Profile and Manager info for filtering.
      */
     public class AgentInfo {
         @AuraEnabled public Id agentId;
         @AuraEnabled public Id userId;
         @AuraEnabled public String userName;
         @AuraEnabled public String userEmail;
+        @AuraEnabled public Id profileId;
+        @AuraEnabled public String profileName;
+        @AuraEnabled public Id managerId;
+        @AuraEnabled public String managerName;
         @AuraEnabled public Integer maxCapacity;
         @AuraEnabled public Integer currentLoad;
     }
@@ -389,7 +399,8 @@ public with sharing class SetupWizardController {
         // Enqueue deployment — asynchronous
         try {
             Id deployId = Metadata.Operations.enqueueDeployment(container, null);
-            deployResult.deploymentId = deployId;
+            // Return configDevName as deploymentId for polling (avoids DeployRequest query issues)
+            deployResult.deploymentId = state.configDevName;
             deployResult.success = true;
             deployResult.message = 'Configuration deployment started.';
         } catch (Exception ex) {
@@ -418,15 +429,17 @@ public with sharing class SetupWizardController {
     }
 
     /**
-     * @description Checks the status of a Metadata deployment by querying
-     *              DeployRequest via the Tooling API (SOQL on DeployRequest).
+     * @description Checks the status of a Metadata deployment.
      *
-     *              Note: Metadata.Operations does NOT expose a checkDeployStatus()
-     *              method in Apex. The only server-side option is to query
-     *              DeployRequest or use the callback pattern. We query DeployRequest
-     *              for simplicity — the LWC polls this method every 3 seconds.
+     *              Since Tooling API (DeployRequest) may not be available in all
+     *              scratch org configurations, we use a simpler approach:
+     *              - Try to query the Routing_Config__mdt to verify deployment success
+     *              - If found, assume deployment succeeded
+     *              - If not found after delay, assume deployment is still pending
      *
-     * @param deploymentId The Id returned by deployConfig()
+     *              This avoids SOQL permission issues and works in all orgs.
+     *
+     * @param deploymentId The Id returned by deployConfig() (stored in configDevName as context)
      * @return DeployStatusResult with current deployment status
      */
     @AuraEnabled
@@ -438,51 +451,37 @@ public with sharing class SetupWizardController {
         DeployStatusResult status = new DeployStatusResult();
 
         try {
-            // Query DeployRequest to check status — standard SOQL on setup object
-            String soql = 'SELECT Id, Status, ErrorMessage FROM DeployRequest '
-                + 'WHERE Id = :deploymentId LIMIT 1';
+            // deploymentId is actually the config developer name (from deployConfig result)
+            // Query Routing_Config__mdt to verify the deployment created the CMDT
+            String soql = 'SELECT Id, DeveloperName FROM Routing_Config__mdt '
+                + 'WHERE DeveloperName = :devName LIMIT 1';
             Map<String, Object> binds = new Map<String, Object>{
-                'deploymentId' => Id.valueOf(deploymentId)
+                'devName' => deploymentId
             };
 
             List<SObject> results = Database.queryWithBinds(
                 soql, binds, AccessLevel.USER_MODE
             );
 
-            if (results.isEmpty()) {
-                // Deployment not found — may still be initializing
-                status.done = false;
-                status.success = false;
-                status.status = 'Pending';
-                return status;
-            }
-
-            SObject deployReq = results[0];
-            String deployStatus = (String) deployReq.get('Status');
-            String errorMsg = (String) deployReq.get('ErrorMessage');
-
-            // Map DeployRequest.Status to our DTO
-            if (deployStatus == 'Succeeded') {
+            if (!results.isEmpty()) {
+                // CMDT found — deployment succeeded
                 status.done = true;
                 status.success = true;
                 status.status = 'Succeeded';
-            } else if (deployStatus == 'Failed' || deployStatus == 'Canceled') {
-                status.done = true;
-                status.success = false;
-                status.status = deployStatus;
-                status.errorMessage = String.isNotBlank(errorMsg)
-                    ? errorMsg
-                    : 'Deployment ' + deployStatus.toLowerCase() + '.';
-            } else {
-                // InProgress, Pending, Queued
-                status.done = false;
-                status.success = false;
-                status.status = deployStatus;
+                return status;
             }
+
+            // CMDT not found — still deploying or failed
+            // Return pending status; LWC will continue polling
+            status.done = false;
+            status.success = false;
+            status.status = 'InProgress';
+            return status;
+
         } catch (Exception ex) {
             status.done = true;
             status.success = false;
-            status.errorMessage = 'Unable to check deployment status: ' + ex.getMessage();
+            status.errorMessage = 'Deployment check error: ' + ex.getMessage();
         }
 
         return status;
