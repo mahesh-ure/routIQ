@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Assignment_Field__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>API name of the field on the routed SObject where the assigned agent User ID is written. Defaults to Owner_Field_API_Name__c when blank. Use this when assignment should write to a different field than ownership — for example, writing to a custom Assigned_Agent__c lookup while leaving OwnerId unchanged. Must be a User lookup or Id field on the target SObject.</description>
+    <label>Assignment Field</label>
+    <length>80</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

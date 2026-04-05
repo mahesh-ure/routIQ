@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_Capacity__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Maximum concurrent open work items an agent can hold for this routing config. Used by the availability filter (Layer 2) to exclude at-capacity agents and by the Supervisor Dashboard (F3) agent load grid. When null or zero, capacity is not enforced for this config — the engine-level Agent__c.Max_Capacity__c still applies.</description>
+    <label>Max Capacity</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

@@ -1,0 +1,120 @@
+<template>
+    <div class="slds-form slds-form_stacked">
+
+        <!-- ── Required Fields ───────────────────────────────── -->
+        <div class="slds-grid slds-gutters slds-wrap">
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input
+                    label={label.configName}
+                    value={configLabel}
+                    required
+                    onchange={handleConfigLabelChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input
+                    label="Developer Name"
+                    value={configDevName}
+                    disabled
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+        </div>
+
+        <div class="slds-grid slds-gutters slds-wrap">
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input
+                    label={label.ownerField}
+                    value={ownerFieldApiName}
+                    required
+                    placeholder="e.g. OwnerId"
+                    onchange={handleOwnerFieldChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+            <div class="slds-col slds-size_1-of-2">
+                <lightning-input
+                    label="Assignment Field (optional)"
+                    value={assignmentField}
+                    placeholder="Leave blank to use Owner Field"
+                    onchange={handleAssignmentFieldChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+        </div>
+
+        <!-- ── Capacity & Priority ───────────────────────────── -->
+        <div class="slds-grid slds-gutters slds-wrap">
+            <div class="slds-col slds-size_1-of-3">
+                <lightning-input
+                    type="number"
+                    label={label.maxCapacity}
+                    value={maxCapacity}
+                    min="1"
+                    max="999"
+                    onchange={handleMaxCapacityChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+            <div class="slds-col slds-size_1-of-3">
+                <lightning-input
+                    type="number"
+                    label="Priority Weight"
+                    value={priorityWeight}
+                    min="1"
+                    max="999999"
+                    field-level-help="Lower weight = higher priority. Default: 100."
+                    onchange={handlePriorityWeightChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+            <div class="slds-col slds-size_1-of-3">
+                <lightning-input
+                    label={label.slaField}
+                    value={slaDeadlineField}
+                    placeholder="e.g. SlaExitDate"
+                    field-level-help="DateTime field for SLA countdown. Optional."
+                    onchange={handleSlaFieldChange}
+                    class="slds-m-bottom_small">
+                </lightning-input>
+            </div>
+        </div>
+
+        <!-- ── Toggle ────────────────────────────────────────── -->
+        <div class="slds-m-bottom_small">
+            <lightning-input
+                type="checkbox"
+                label={label.includeBusy}
+                checked={includeBusyAgents}
+                onchange={handleIncludeBusyChange}>
+            </lightning-input>
+        </div>
+
+        <!-- ── Defer Settings (collapsible) ──────────────────── -->
+        <div class="slds-box slds-box_x-small slds-theme_shade slds-m-top_small">
+            <p class="slds-text-title_caps slds-m-bottom_x-small">Defer Settings (Optional)</p>
+            <div class="slds-grid slds-gutters slds-wrap">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-input
+                        label="Defer Reset Field"
+                        value={deferResetField}
+                        placeholder="e.g. OwnerId or Status"
+                        onchange={handleDeferFieldChange}
+                        class="slds-m-bottom_small">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-input
+                        label="Defer Reset Value"
+                        value={deferResetValue}
+                        placeholder="e.g. Queue ID or Open"
+                        onchange={handleDeferValueChange}
+                        class="slds-m-bottom_small">
+                    </lightning-input>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</template>

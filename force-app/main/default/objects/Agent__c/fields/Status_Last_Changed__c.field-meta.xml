@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status_Last_Changed__c</fullName>
+    <description>Timestamp of the last Availability_Status__c change. Updated by AgentAvailabilityController (Layer 3) whenever the agent toggles their availability. Used by the Supervisor Dashboard (F6) for agent status duration display and idle time calculations.</description>
+    <externalId>false</externalId>
+    <label>Status Last Changed</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>DateTime</type>
+</CustomField>

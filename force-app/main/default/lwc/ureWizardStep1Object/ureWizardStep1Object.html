@@ -1,0 +1,63 @@
+<template>
+    <div class="slds-form slds-form_stacked">
+
+        <!-- ── Help Text ─────────────────────────────────────── -->
+        <p class="slds-text-body_regular slds-m-bottom_medium">{label.help}</p>
+
+        <!-- ── Object API Name Input ─────────────────────────── -->
+        <div class="slds-form-element slds-m-bottom_medium">
+            <lightning-input
+                label={label.objectLabel}
+                value={objectApiName}
+                placeholder={label.placeholder}
+                required
+                onchange={handleObjectChange}>
+            </lightning-input>
+
+            <lightning-button
+                label="Validate"
+                variant="neutral"
+                icon-name="utility:check"
+                onclick={handleValidate}
+                disabled={isValidating}
+                class="slds-m-top_x-small">
+            </lightning-button>
+        </div>
+
+        <!-- ── Validation Spinner ────────────────────────────── -->
+        <template lwc:if={isValidating}>
+            <lightning-spinner
+                alternative-text="Validating object"
+                size="small">
+            </lightning-spinner>
+        </template>
+
+        <!-- ── Validation Result ─────────────────────────────── -->
+        <template lwc:if={hasValidationMessage}>
+            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                <lightning-icon
+                    icon-name={validationIcon}
+                    size="x-small"
+                    class="slds-m-right_x-small">
+                </lightning-icon>
+                <span class={validationClass}>{validationMessage}</span>
+            </div>
+        </template>
+
+        <!-- ── Existing Configs Info ─────────────────────────── -->
+        <template lwc:if={hasExistingConfigs}>
+            <div class="slds-m-top_medium slds-box slds-box_x-small slds-theme_shade">
+                <p class="slds-text-title_caps slds-m-bottom_xx-small">Existing Configurations</p>
+                <template for:each={existingConfigs} for:item="config">
+                    <p key={config.developerName} class="slds-text-body_small">
+                        {config.label} — {config.objectApiName}
+                        <template lwc:if={config.isActive}>
+                            <lightning-badge label="Active" class="slds-m-left_x-small"></lightning-badge>
+                        </template>
+                    </p>
+                </template>
+            </div>
+        </template>
+
+    </div>
+</template>

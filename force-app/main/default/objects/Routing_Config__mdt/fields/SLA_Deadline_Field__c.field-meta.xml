@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SLA_Deadline_Field__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>API name of the DateTime field on the routed SObject that holds the SLA deadline. Used by the Agent Work Panel (F2) for SLA countdown display. Example: SlaExitDate for Case, Target_Date__c for custom objects. Must be a DateTime field — Date fields are not supported for countdown calculation.</description>
+    <label>SLA Deadline Field</label>
+    <length>80</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

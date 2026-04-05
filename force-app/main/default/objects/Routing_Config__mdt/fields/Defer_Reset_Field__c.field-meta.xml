@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Defer_Reset_Field__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>API name of the field on the routed SObject to reset when an agent defers work. Used by the Agent Work Panel (F2) defer action. Example: OwnerId to reassign back to queue, Status to revert to open. Must be a valid writable field on the target SObject.</description>
+    <label>Defer Reset Field</label>
+    <length>80</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

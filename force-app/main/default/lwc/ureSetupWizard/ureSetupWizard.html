@@ -1,0 +1,107 @@
+<template>
+    <lightning-card title={label.title} icon-name="custom:custom108">
+
+        <!-- ── Progress Indicator ────────────────────────────────── -->
+        <div class="slds-p-horizontal_medium slds-p-top_small">
+            <lightning-progress-bar
+                value={progressPercent}
+                size="large"
+                variant="circular">
+            </lightning-progress-bar>
+            <p class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small slds-text-align_center">
+                {stepProgress} — {currentStepTitle}
+            </p>
+        </div>
+
+        <!-- ── Step Content ──────────────────────────────────────── -->
+        <div class="slds-p-around_medium">
+
+            <!-- Step 1: Object Selection -->
+            <template lwc:if={isStep1}>
+                <c-ure-wizard-step1-object
+                    data-step="1"
+                    wizard-state={wizardState}
+                    onstepdata={handleStepData}>
+                </c-ure-wizard-step1-object>
+            </template>
+
+            <!-- Step 2: Configuration -->
+            <template lwc:if={isStep2}>
+                <c-ure-wizard-step2-config
+                    data-step="2"
+                    wizard-state={wizardState}
+                    onstepdata={handleStepData}>
+                </c-ure-wizard-step2-config>
+            </template>
+
+            <!-- Step 3: Conditions -->
+            <template lwc:if={isStep3}>
+                <c-ure-wizard-step3-conditions
+                    data-step="3"
+                    wizard-state={wizardState}
+                    onstepdata={handleStepData}>
+                </c-ure-wizard-step3-conditions>
+            </template>
+
+            <!-- Step 4: Agents -->
+            <template lwc:if={isStep4}>
+                <c-ure-wizard-step4-agents
+                    data-step="4"
+                    wizard-state={wizardState}
+                    onstepdata={handleStepData}>
+                </c-ure-wizard-step4-agents>
+            </template>
+
+            <!-- Step 5: Simulate & Activate -->
+            <template lwc:if={isStep5}>
+                <c-ure-wizard-step5-simulate
+                    data-step="5"
+                    wizard-state={wizardState}
+                    onstepdata={handleStepData}
+                    onfinish={handleFinish}>
+                </c-ure-wizard-step5-simulate>
+            </template>
+        </div>
+
+        <!-- ── Navigation Buttons ────────────────────────────────── -->
+        <div slot="footer" class="slds-grid slds-grid_align-spread">
+            <div>
+                <lightning-button
+                    label={label.cancel}
+                    variant="neutral"
+                    onclick={handleCancel}>
+                </lightning-button>
+            </div>
+            <div>
+                <template lwc:if={showPrevious}>
+                    <lightning-button
+                        label={label.previous}
+                        variant="neutral"
+                        icon-name="utility:back"
+                        onclick={handlePrevious}
+                        class="slds-m-right_x-small">
+                    </lightning-button>
+                </template>
+                <template lwc:if={showNext}>
+                    <lightning-button
+                        label={label.next}
+                        variant="brand"
+                        icon-name="utility:forward"
+                        icon-position="right"
+                        onclick={handleNext}>
+                    </lightning-button>
+                </template>
+                <template lwc:if={showFinish}>
+                    <lightning-button
+                        label={label.finish}
+                        variant="brand"
+                        icon-name="utility:check"
+                        icon-position="right"
+                        onclick={handleNext}>
+                    </lightning-button>
+                </template>
+            </div>
+        </div>
+
+    </lightning-card>
+</template>
