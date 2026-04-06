@@ -9,7 +9,7 @@
  *
  * @group UI
  */
-import { LightningElement, api } from 'lwc';
+import { LightningElement, api, track } from 'lwc';
 
 import LABEL_CONFIG_NAME from '@salesforce/label/c.URE_WizardConfigNameLabel';
 import LABEL_OWNER_FIELD from '@salesforce/label/c.URE_WizardOwnerFieldLabel';
@@ -31,17 +31,17 @@ export default class UreWizardStep2Config extends LightningElement {
 
     @api wizardState = {};
 
-    // Local state for form fields
-    configLabel = '';
-    configDevName = '';
-    ownerFieldApiName = 'OwnerId';
-    slaDeadlineField = '';
-    maxCapacity = 5;
-    priorityWeight = 100;
-    assignmentField = '';
-    includeBusyAgents = true;
-    deferResetField = '';
-    deferResetValue = '';
+    // Local state for form fields — must use @track for reactivity
+    @track configLabel = '';
+    @track configDevName = '';
+    @track ownerFieldApiName = 'OwnerId';
+    @track slaDeadlineField = '';
+    @track maxCapacity = 5;
+    @track priorityWeight = 100;
+    @track assignmentField = '';
+    @track includeBusyAgents = true;
+    @track deferResetField = '';
+    @track deferResetValue = '';
 
     connectedCallback() {
         // Restore previous state if re-entering this step

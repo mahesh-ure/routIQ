@@ -4,6 +4,31 @@
         <!-- ── Instructions ──────────────────────────────────── -->
         <p class="slds-text-body_regular slds-m-bottom_medium">{label.selectAgents}</p>
 
+        <!-- ── Filter Options ────────────────────────────────── -->
+        <div class="slds-box slds-box_x-small slds-theme_shade slds-m-bottom_medium">
+            <p class="slds-text-title_caps slds-m-bottom_small">Filter Agents (Optional)</p>
+            <div class="slds-grid slds-gutters slds-wrap">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox
+                        label="Filter by Profile"
+                        value={selectedProfileId}
+                        options={profileOptions}
+                        onchange={handleProfileFilterChange}
+                        placeholder="Select a profile">
+                    </lightning-combobox>
+                </div>
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox
+                        label="Filter by Manager"
+                        value={selectedManagerId}
+                        options={managerOptions}
+                        onchange={handleManagerFilterChange}
+                        placeholder="Select a manager">
+                    </lightning-combobox>
+                </div>
+            </div>
+        </div>
+
         <!-- ── Skill Badges from Step 3 ──────────────────────── -->
         <template lwc:if={hasSkillBadges}>
             <div class="slds-m-bottom_medium">

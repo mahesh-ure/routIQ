@@ -27,7 +27,12 @@ export default class UreWizardStep4Agents extends LightningElement {
     @api wizardState = {};
 
     @track agents = [];
+    @track allAgents = [];  // Unfiltered full list
     @track selectedAgentIds = new Set();
+    @track profileOptions = [];
+    @track managerOptions = [];
+    selectedProfileId = '';
+    selectedManagerId = '';
     isLoading = false;
     error = '';
 
@@ -55,17 +60,94 @@ export default class UreWizardStep4Agents extends LightningElement {
         this.error = '';
         try {
             const result = await getActiveAgents();
-            this.agents = result.map(agent => ({
+            this.allAgents = result.map(agent => ({
                 ...agent,
                 selected: this.selectedAgentIds.has(agent.userId),
                 capacityDisplay: `${agent.currentLoad}/${agent.maxCapacity}`
             }));
+            this.agents = this.allAgents;
+            this.buildFilterOptions();
         } catch (err) {
             this.error = err.body?.message || 'Failed to load agents.';
+            this.allAgents = [];
             this.agents = [];
         } finally {
             this.isLoading = false;
         }
+    }
+
+    /**
+     * @description Build unique profile and manager filter options from loaded agents.
+     */
+    buildFilterOptions() {
+        const profileSet = new Set();
+        const managerSet = new Set();
+
+        this.allAgents.forEach(agent => {
+            if (agent.profileName) {
+                profileSet.add(JSON.stringify({ id: agent.profileId, name: agent.profileName }));
+            }
+            if (agent.managerName) {
+                managerSet.add(JSON.stringify({ id: agent.managerId, name: agent.managerName }));
+            }
+        });
+
+        this.profileOptions = [
+            { label: '-- All Profiles --', value: '' },
+            ...Array.from(profileSet)
+                .map(p => {
+                    const obj = JSON.parse(p);
+                    return { label: obj.name, value: obj.id };
+                })
+                .sort((a, b) => a.label.localeCompare(b.label))
+        ];
+
+        this.managerOptions = [
+            { label: '-- All Managers --', value: '' },
+            ...Array.from(managerSet)
+                .map(m => {
+                    const obj = JSON.parse(m);
+                    return { label: obj.name, value: obj.id };
+                })
+                .sort((a, b) => a.label.localeCompare(b.label))
+        ];
+    }
+
+    /**
+     * @description Apply profile filter to agent list.
+     */
+    handleProfileFilterChange(event) {
+        this.selectedProfileId = event.detail.value;
+        this.applyFilters();
+    }
+
+    /**
+     * @description Apply manager filter to agent list.
+     */
+    handleManagerFilterChange(event) {
+        this.selectedManagerId = event.detail.value;
+        this.applyFilters();
+    }
+
+    /**
+     * @description Apply all active filters to agents list.
+     */
+    applyFilters() {
+        let filtered = this.allAgents;
+
+        if (this.selectedProfileId) {
+            filtered = filtered.filter(a => a.profileId === this.selectedProfileId);
+        }
+
+        if (this.selectedManagerId) {
+            filtered = filtered.filter(a => a.managerId === this.selectedManagerId);
+        }
+
+        // Restore selected state
+        this.agents = filtered.map(a => ({
+            ...a,
+            selected: this.selectedAgentIds.has(a.userId)
+        }));
     }
 
     // ─── Event Handlers ─────────────────────────────────────────────────
