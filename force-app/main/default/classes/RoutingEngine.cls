@@ -214,14 +214,13 @@ public with sharing class RoutingEngine {
         }
 
         // ─── Phase 4: Process Each Qualified Bundle ─────────────────────
-        // This phase contains DML. Each bundle's processBundle() may:
-        //   • 1 SOQL for Allow_Multiple check (dirty-read correct)
-        //   • 1 SOQL for candidate query
-        //   • 1–N SOQL for lock attempts
-        //   • 1–2 DML for assignment + agent load update
-        // First successful assignment wins — remaining bundles skipped.
+        // DryRun: full matching pipeline executes but processBundle()
+        // skips lock + assign DML. Phase 5 skips audit + events entirely.
+        Boolean isDryRun = (request.dryRun == true);
         List<AuditLogger.AuditEntry> auditEntries =
             new List<AuditLogger.AuditEntry>();
+        List<RoutingConditionTrace> allTraces =
+            new List<RoutingConditionTrace>();
         Integer successIndex = -1;
         RoutingResult finalResult = null;
 
@@ -232,7 +231,8 @@ public with sharing class RoutingEngine {
                 Logger.info('Processing bundle ' + (i + 1)
                         + '/' + qualifiedBundles.size()
                         + ': "' + bundle.developerName + '"'
-                        + ' | object=' + bundle.objectApiName)
+                        + ' | object=' + bundle.objectApiName
+                        + (isDryRun ? ' | dryRun=true' : ''))
                     .category(Logger.Category.ENGINE)
                     .inClass(CLS).inMethod('execute')
                     .forConfig(bundle.developerName)
@@ -244,6 +244,7 @@ public with sharing class RoutingEngine {
                 );
 
                 auditEntries.add(processed.auditEntry);
+                allTraces.addAll(processed.conditionTraces);
 
                 if (processed.outcome.success) {
                     successIndex = i;
@@ -251,40 +252,44 @@ public with sharing class RoutingEngine {
                         processed.outcome, agentUserId, entryPoint,
                         bundle.objectApiName
                     );
-                    break; // First successful assignment wins (pull model)
+                    finalResult.conditionTraces = allTraces;
+                    finalResult.reasonSummary = buildReasonSummary(
+                        processed.outcome, bundle, allTraces, isDryRun
+                    );
+                    break; // First successful assignment/match wins
                 }
             }
         } finally {
-            // ─── Phase 5a: Flush Audit Entries (1 DML) — ALWAYS runs ────
-            // Audit insert is in the same transaction as assignment DML.
-            // If an unhandled exception propagated, both roll back together
-            // (atomic). The finally block ensures audit runs even on
-            // per-bundle exceptions that were caught and continued.
-            List<Id> logIds = AuditLogger.flush(auditEntries);
+            // ─── Phase 5: Audit + Events ────────────────────────────────
+            // DryRun: skip ALL side effects — zero DML, zero events.
+            if (!isDryRun) {
+                // ─── Phase 5a: Flush Audit Entries (1 DML) ──────────────
+                List<Id> logIds = AuditLogger.flush(auditEntries);
 
-            if (finalResult != null
-                && finalResult.success
-                && successIndex >= 0
-                && successIndex < logIds.size()
-            ) {
-                finalResult.routingLogId = (logIds[successIndex] != null)
-                    ? String.valueOf(logIds[successIndex])
-                    : null;
+                if (finalResult != null
+                    && finalResult.success
+                    && successIndex >= 0
+                    && successIndex < logIds.size()
+                ) {
+                    finalResult.routingLogId = (logIds[successIndex] != null)
+                        ? String.valueOf(logIds[successIndex])
+                        : null;
+                }
+
+                // ─── Phase 5b: Publish Platform Events (1 DML) ─────────
+                RoutingEventPublisher.publishFromAudit(
+                    auditEntries, request, entryPoint, logIds
+                );
             }
-
-            // ─── Phase 5b: Publish Platform Events (1 DML) ─────────────
-            // Published AFTER audit flush so Correlation_Id__c (Routing_Log__c Id)
-            // is available. PublishAfterCommit ensures events only fire when
-            // the entire transaction commits. Failures are logged, never thrown.
-            // DryRun requests skip publishing entirely (zero side effects).
-            RoutingEventPublisher.publishFromAudit(
-                auditEntries, request, entryPoint, logIds
-            );
         }
 
         // ─── Phase 6: Return Result ─────────────────────────────────────
         if (finalResult != null) {
-            if (finalResult.success && String.isNotBlank(finalResult.recordId)) {
+            // DryRun: skip recordName query (non-essential, saves 1 SOQL)
+            if (!isDryRun
+                && finalResult.success
+                && String.isNotBlank(finalResult.recordId)
+            ) {
                 finalResult.recordName = AssignmentSelector.queryRecordName(
                     finalResult.objectApiName,
                     Id.valueOf(finalResult.recordId)
@@ -293,11 +298,19 @@ public with sharing class RoutingEngine {
             return finalResult;
         }
 
-        Logger.info('No bundle produced a successful assignment')
+        // No bundle produced a match — build no-match result with traces
+        Logger.info('No bundle produced a successful assignment'
+                + (isDryRun ? ' (dryRun)' : ''))
             .category(Logger.Category.ENGINE)
             .inClass(CLS).inMethod('execute')
             .log();
-        return RoutingResult.noMatch();
+
+        RoutingResult noMatchResult = RoutingResult.noMatch();
+        noMatchResult.conditionTraces = allTraces;
+        noMatchResult.reasonSummary = 'No matching candidates found across '
+            + qualifiedBundles.size() + ' qualified configuration(s).'
+            + (isDryRun ? ' [Dry Run]' : '');
+        return noMatchResult;
     }
 
     // ─── Inner Value Object ───────────────────────────────────────────────────
@@ -305,6 +318,11 @@ public with sharing class RoutingEngine {
     private class ProcessOutcome {
         AssignmentResolver.AssignmentOutcome outcome;
         AuditLogger.AuditEntry auditEntry;
+        List<RoutingConditionTrace> conditionTraces;
+
+        private ProcessOutcome() {
+            this.conditionTraces = new List<RoutingConditionTrace>();
+        }
     }
 
     // ─── Bundle Processing ────────────────────────────────────────────────────
@@ -336,13 +354,11 @@ public with sharing class RoutingEngine {
         String entryPoint
     ) {
         ProcessOutcome result = new ProcessOutcome();
+        Boolean isDryRun = (request.dryRun == true);
 
         try {
             // ── Allow_Multiple gate (1 SOQL) — BEFORE candidate query ────
-            // Per-bundle: each config has its own allowMultiple setting and
-            // targets different objects. SOQL sees dirty reads from prior
-            // bundle DML within the same transaction — atomically correct.
-            // Saves 1 SOQL (candidate query) when agent is already assigned.
+            // DryRun still evaluates this gate to accurately simulate behavior.
             if (!bundle.allowMultiple) {
                 List<SObject> existing = AssignmentSelector.queryOwnedRecords(
                     bundle.objectApiName,
@@ -352,7 +368,8 @@ public with sharing class RoutingEngine {
                 if (!existing.isEmpty()) {
                     Logger.info('Agent already assigned (Allow_Multiple=false)'
                             + ' | config=' + bundle.developerName
-                            + ' | agent=' + agentUserId)
+                            + ' | agent=' + agentUserId
+                            + (isDryRun ? ' | dryRun=true' : ''))
                         .category(Logger.Category.ASSIGNMENT)
                         .inClass(CLS).inMethod('processBundle')
                         .forConfig(bundle.developerName)
@@ -381,12 +398,20 @@ public with sharing class RoutingEngine {
             // ── Execute candidate query (1 SOQL) ─────────────────────────
             List<SObject> candidates = CandidateSelector.query(spec);
 
+            // ── Condition Traces (Layer 2) — evaluate conditions against top candidate ──
+            if (!candidates.isEmpty()) {
+                result.conditionTraces = buildConditionTraces(
+                    bundle.conditions, candidates[0]
+                );
+            } else {
+                result.conditionTraces = buildConditionTracesNoRecord(
+                    bundle.conditions
+                );
+            }
+
             // ── Agent capability VALUE match (0 SOQL — cached data) ──────
-            // TYPE-level pre-filter already ran in filterByAgentCapabilities().
-            // This checks VALUE-level: does agent's Province include the
-            // specific value on this work record (e.g. "Ontario")?
-            // Evaluated BEFORE lock attempts to avoid wasting SOQL on
-            // FOR UPDATE queries for a record the agent can't handle.
+            // Layer 4: AgentMatcher now returns skill traces on MatchResult.
+            // Append them to conditionTraces for unified trace output.
             if (!candidates.isEmpty() && !bundle.matchConditions.isEmpty()) {
                 SObject topCandidate = candidates[0];
                 AgentMatcher.MatchResult matchResult = AgentMatcher.evaluate(
@@ -396,9 +421,12 @@ public with sharing class RoutingEngine {
                     bundle.developerName
                 );
 
+                // Layer 4: Append skill match traces
+                if (matchResult.skillTraces != null) {
+                    result.conditionTraces.addAll(matchResult.skillTraces);
+                }
+
                 if (!matchResult.matched) {
-                    // Defense-in-depth: AgentMatcher throws on mandatory
-                    // mismatch, but if it returns false instead, handle it.
                     result.outcome = AssignmentResolver.outcomeCapabilityMismatch(
                         'Agent does not match required capabilities.'
                     );
@@ -409,11 +437,21 @@ public with sharing class RoutingEngine {
                 }
             }
 
-            // ── Lock + Assign (1–N SOQL + 1–2 DML) ──────────────────────
-            // FOR UPDATE lock is acquired here. Lock is held until the
-            // entire transaction commits (including audit flush in Phase 5).
-            // This prevents concurrent transactions from modifying the
-            // same record between lock acquisition and owner update.
+            // ── DryRun: skip Lock + Assign — produce simulated outcome ──
+            if (isDryRun) {
+                Id topRecordId = (!candidates.isEmpty())
+                    ? candidates[0].Id
+                    : null;
+                result.outcome = (topRecordId != null)
+                    ? AssignmentResolver.outcomeDryRun(topRecordId, candidates.size())
+                    : AssignmentResolver.outcomeError('No matching candidates found (dry run).');
+                result.auditEntry = AuditLogger.createEntry(
+                    result.outcome, bundle, agentUserId, entryPoint, spec
+                );
+                return result;
+            }
+
+            // ── Lock + Assign (1–N SOQL + 1–2 DML) — live mode only ─────
             AssignmentResolver.AssignmentOutcome outcome =
                 AssignmentResolver.resolve(bundle, candidates, agentUserId);
 
@@ -423,8 +461,6 @@ public with sharing class RoutingEngine {
             );
 
         } catch (CapabilityMismatchException cmEx) {
-            // Capability or capacity failure — audit and continue to next bundle.
-            // This is NOT an error — it's a normal routing outcome.
             Logger.warn('Capability/capacity gate failed for config "'
                     + bundle.developerName + '" | ' + cmEx.getMessage())
                 .category(Logger.Category.ENGINE)
@@ -451,9 +487,6 @@ public with sharing class RoutingEngine {
             );
 
         } catch (Exception ex) {
-            // Per-bundle failure — log, audit, and continue to next bundle.
-            // The exception does NOT propagate — transaction remains intact
-            // for subsequent bundles and audit flush.
             Logger.error('Exception processing config "' + bundle.developerName + '"')
                 .category(Logger.Category.ENGINE)
                 .inClass(CLS).inMethod('processBundle')
@@ -548,5 +581,154 @@ public with sharing class RoutingEngine {
         return AssignmentResolver.outcomeError(
             ex.getTypeName() + ': ' + ex.getMessage()
         );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LAYER 2 — Condition Traces + Reason Summary
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description Builds condition traces by evaluating each Routing_Condition__mdt
+     *              against the top candidate record. Each trace captures:
+     *              • The field, operator, and expected values from CMDT
+     *              • The actual value found on the record
+     *              • Whether the condition passed (record matched the query WHERE clause)
+     *
+     *              Because conditions are evaluated in SOQL (not in-memory), the
+     *              candidate already satisfies all conditions. Traces here are
+     *              confirmatory — they show callers WHAT was tested and what the
+     *              record's actual values were. Useful for dryRun simulation display.
+     *
+     * @param conditions  Sorted conditions from ConfigBundle
+     * @param topCandidate The first candidate record returned by the query
+     * @return List of RoutingConditionTrace, one per condition
+     */
+    private static List<RoutingConditionTrace> buildConditionTraces(
+        List<Routing_Condition__mdt> conditions,
+        SObject topCandidate
+    ) {
+        List<RoutingConditionTrace> traces = new List<RoutingConditionTrace>();
+
+        if (conditions == null || conditions.isEmpty()) {
+            return traces;
+        }
+
+        for (Routing_Condition__mdt cond : conditions) {
+            Object actualObj = safeGetField(topCandidate, cond.Field_API_Name__c);
+            String actualValue = (actualObj != null)
+                ? String.valueOf(actualObj)
+                : '';
+
+            // The candidate passed the SOQL WHERE clause, so all conditions
+            // are satisfied. Trace records confirm this for display.
+            // Layer 3: Include condition group, value type, and sort order metadata.
+            traces.add(RoutingConditionTrace.createWithMetadata(
+                cond.Field_API_Name__c,
+                cond.Operator__c,
+                cond.Values__c,
+                actualValue,
+                true,
+                cond.Condition_Group__c,
+                cond.Value_Type__c,
+                cond.Sort_Order__c
+            ));
+        }
+
+        return traces;
+    }
+
+    /**
+     * @description Builds condition traces when no candidates were returned.
+     *              All conditions are marked as passed=false since there is no
+     *              record to evaluate against.
+     */
+    private static List<RoutingConditionTrace> buildConditionTracesNoRecord(
+        List<Routing_Condition__mdt> conditions
+    ) {
+        List<RoutingConditionTrace> traces = new List<RoutingConditionTrace>();
+
+        if (conditions == null || conditions.isEmpty()) {
+            return traces;
+        }
+
+        for (Routing_Condition__mdt cond : conditions) {
+            // Layer 3: Include condition group, value type, and sort order metadata.
+            traces.add(RoutingConditionTrace.createWithMetadata(
+                cond.Field_API_Name__c,
+                cond.Operator__c,
+                cond.Values__c,
+                '',     // No record -- no actual value
+                false,  // No record matched
+                cond.Condition_Group__c,
+                cond.Value_Type__c,
+                cond.Sort_Order__c
+            ));
+        }
+
+        return traces;
+    }
+
+    /**
+     * @description Safely reads a field value from an SObject without throwing
+     *              SObjectException on missing fields.
+     */
+    private static Object safeGetField(SObject record, String fieldApiName) {
+        if (record == null || String.isBlank(fieldApiName)) {
+            return null;
+        }
+        try {
+            return record.get(fieldApiName);
+        } catch (SObjectException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * @description Builds a human-readable reason summary for the routing outcome.
+     *              Consumed by Setup Wizard simulate step and Supervisor Dashboard.
+     *
+     * @param outcome  The assignment result
+     * @param bundle   The config that produced the outcome
+     * @param traces   Condition traces for the evaluation
+     * @param isDryRun Whether this was a simulation
+     * @return One-line summary describing the routing decision
+     */
+    private static String buildReasonSummary(
+        AssignmentResolver.AssignmentOutcome outcome,
+        ConfigBundle bundle,
+        List<RoutingConditionTrace> traces,
+        Boolean isDryRun
+    ) {
+        Integer passedCount = 0;
+        for (RoutingConditionTrace t : traces) {
+            if (t.passed) {
+                passedCount++;
+            }
+        }
+        String condSummary = passedCount + ' of ' + traces.size()
+            + ' condition(s) matched';
+
+        String prefix = isDryRun ? '[Dry Run] ' : '';
+
+        if (outcome.success) {
+            return prefix + 'Assigned via "' + bundle.developerName + '" — '
+                + condSummary
+                + ', ' + outcome.candidateCount + ' candidate(s) found'
+                + (outcome.retryCount > 0
+                    ? ', ' + outcome.retryCount + ' lock retry(ies)'
+                    : '')
+                + '.';
+        }
+
+        // Failure summaries by status
+        String status = outcome.status;
+        if (status == 'Dry_Run') {
+            return prefix + 'Would assign via "' + bundle.developerName + '" — '
+                + condSummary
+                + ', ' + outcome.candidateCount + ' candidate(s) found.';
+        }
+
+        return prefix + 'No assignment via "' + bundle.developerName + '" — '
+            + outcome.errorMessage;
     }
 }
