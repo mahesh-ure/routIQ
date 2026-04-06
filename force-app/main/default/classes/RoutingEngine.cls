@@ -255,7 +255,7 @@ public with sharing class RoutingEngine {
                 }
             }
         } finally {
-            // ─── Phase 5: Flush Audit Entries (1 DML) — ALWAYS runs ─────
+            // ─── Phase 5a: Flush Audit Entries (1 DML) — ALWAYS runs ────
             // Audit insert is in the same transaction as assignment DML.
             // If an unhandled exception propagated, both roll back together
             // (atomic). The finally block ensures audit runs even on
@@ -271,6 +271,15 @@ public with sharing class RoutingEngine {
                     ? String.valueOf(logIds[successIndex])
                     : null;
             }
+
+            // ─── Phase 5b: Publish Platform Events (1 DML) ─────────────
+            // Published AFTER audit flush so Correlation_Id__c (Routing_Log__c Id)
+            // is available. PublishAfterCommit ensures events only fire when
+            // the entire transaction commits. Failures are logged, never thrown.
+            // DryRun requests skip publishing entirely (zero side effects).
+            RoutingEventPublisher.publishFromAudit(
+                auditEntries, request, entryPoint, logIds
+            );
         }
 
         // ─── Phase 6: Return Result ─────────────────────────────────────

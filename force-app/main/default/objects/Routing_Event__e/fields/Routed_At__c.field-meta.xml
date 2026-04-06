@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Routed_At__c</fullName>
+    <description>Server timestamp when the routing decision was made. Set by AuditLogger — same value as Routing_Log__c.Routed_At__c for correlation.</description>
+    <externalId>false</externalId>
+    <isFilteringDisabled>false</isFilteringDisabled>
+    <isNameField>false</isNameField>
+    <isSortingDisabled>false</isSortingDisabled>
+    <label>Routed At</label>
+    <required>false</required>
+    <type>DateTime</type>
+</CustomField>

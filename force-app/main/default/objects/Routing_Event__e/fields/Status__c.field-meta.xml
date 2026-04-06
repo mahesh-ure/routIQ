@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status__c</fullName>
+    <description>Routing outcome status. Values mirror Routing_Log__c.Status__c: ASSIGNED, NO_MATCH, CAPABILITY_MISMATCH, CAPACITY_EXCEEDED, LOCK_CONTENTION, RETRY_EXHAUSTED, FAILED. Subscribers can filter for specific outcomes.</description>
+    <externalId>false</externalId>
+    <isFilteringDisabled>false</isFilteringDisabled>
+    <isNameField>false</isNameField>
+    <isSortingDisabled>false</isSortingDisabled>
+    <label>Status</label>
+    <length>40</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

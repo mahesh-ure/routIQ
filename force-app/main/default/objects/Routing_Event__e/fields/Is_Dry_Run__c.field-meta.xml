@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Dry_Run__c</fullName>
+    <description>True when the routing was a simulation (dryRun=true). Dry-run events are NOT published by default — this field exists for future use if admins opt-in to simulation event streaming.</description>
+    <defaultValue>false</defaultValue>
+    <externalId>false</externalId>
+    <isFilteringDisabled>false</isFilteringDisabled>
+    <isNameField>false</isNameField>
+    <isSortingDisabled>false</isSortingDisabled>
+    <label>Is Dry Run</label>
+    <type>Checkbox</type>
+</CustomField>
