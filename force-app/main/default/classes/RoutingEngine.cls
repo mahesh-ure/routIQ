@@ -137,6 +137,31 @@ public with sharing class RoutingEngine {
             );
         }
 
+        // Availability gate — Away and Offline agents are always excluded.
+        // This runs in Phase 2 (fail-fast, 0 extra SOQL — field already queried).
+        String availStatus = (String) currentAgent.get('Availability_Status__c');
+        if (availStatus == 'Away' || availStatus == 'Offline') {
+            Logger.warn('Agent gate: availability excluded | agent='
+                    + agentUserId + ' | status=' + availStatus)
+                .category(Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('execute')
+                .log();
+            return RoutingResult.failure(
+                request.recordId,
+                'Agent is currently ' + availStatus
+                + '. Change your availability to Online or Busy to receive work.'
+            );
+        }
+
+        // ─── Override Agent shortcut (Layer 2b) ───────────────────────
+        // When overrideAgentId is populated, the engine skips candidate
+        // ranking and assigns directly to the specified agent. Used by
+        // Supervisor Dashboard manual reassign. Validates agent exists,
+        // is active, and is not Offline.
+        if (request.overrideAgentId != null) {
+            return executeOverride(request, agentUserId, entryPoint);
+        }
+
         // Pre-load skill data into transaction cache (2-3 SOQL on first call).
         // getCapabilityMap() internally loads assignments + bundle entries.
         // Cached for the remainder of this transaction — AgentMatcher
@@ -240,7 +265,7 @@ public with sharing class RoutingEngine {
                     .log();
 
                 ProcessOutcome processed = processBundle(
-                    bundle, request, agentUserId, entryPoint
+                    bundle, request, agentUserId, entryPoint, availStatus
                 );
 
                 auditEntries.add(processed.auditEntry);
@@ -254,7 +279,8 @@ public with sharing class RoutingEngine {
                     );
                     finalResult.conditionTraces = allTraces;
                     finalResult.reasonSummary = buildReasonSummary(
-                        processed.outcome, bundle, allTraces, isDryRun
+                        processed.outcome, bundle, allTraces, isDryRun,
+                        currentAgent
                     );
                     break; // First successful assignment/match wins
                 }
@@ -351,12 +377,34 @@ public with sharing class RoutingEngine {
         ConfigBundle bundle,
         RoutingRequest request,
         Id agentUserId,
-        String entryPoint
+        String entryPoint,
+        String availStatus
     ) {
         ProcessOutcome result = new ProcessOutcome();
         Boolean isDryRun = (request.dryRun == true);
 
         try {
+            // ── Busy agent gate (per-bundle, 0 SOQL — cached) ────────────
+            // When Include_Busy_Agents__c = false, Busy agents are excluded
+            // entirely for this config. Away/Offline already blocked in Phase 2.
+            if (!bundle.includeBusyAgents && availStatus == 'Busy') {
+                Logger.info('Agent excluded (Busy, Include_Busy_Agents=false)'
+                        + ' | config=' + bundle.developerName
+                        + ' | agent=' + agentUserId)
+                    .category(Logger.Category.ENGINE)
+                    .inClass(CLS).inMethod('processBundle')
+                    .forConfig(bundle.developerName)
+                    .forObject(bundle.objectApiName)
+                    .log();
+                result.outcome = AssignmentResolver.outcomeError(
+                    'Agent is Busy and this configuration excludes Busy agents.'
+                );
+                result.auditEntry = AuditLogger.createEntry(
+                    result.outcome, bundle, agentUserId, entryPoint, null
+                );
+                return result;
+            }
+
             // ── Allow_Multiple gate (1 SOQL) — BEFORE candidate query ────
             // DryRun still evaluates this gate to accurately simulate behavior.
             if (!bundle.allowMultiple) {
@@ -697,7 +745,8 @@ public with sharing class RoutingEngine {
         AssignmentResolver.AssignmentOutcome outcome,
         ConfigBundle bundle,
         List<RoutingConditionTrace> traces,
-        Boolean isDryRun
+        Boolean isDryRun,
+        Agent__c agent
     ) {
         Integer passedCount = 0;
         for (RoutingConditionTrace t : traces) {
@@ -710,6 +759,12 @@ public with sharing class RoutingEngine {
 
         String prefix = isDryRun ? '[Dry Run] ' : '';
 
+        // Agent context: name (User__c) + capacity snapshot
+        Decimal load = (agent.Current_Load__c != null) ? agent.Current_Load__c : 0;
+        Decimal cap = (agent.Max_Capacity__c != null) ? agent.Max_Capacity__c : 0;
+        String agentCtx = ' | agent=' + agent.User__c
+            + ' capacity=' + load.intValue() + '/' + cap.intValue();
+
         if (outcome.success) {
             return prefix + 'Assigned via "' + bundle.developerName + '" — '
                 + condSummary
@@ -717,18 +772,231 @@ public with sharing class RoutingEngine {
                 + (outcome.retryCount > 0
                     ? ', ' + outcome.retryCount + ' lock retry(ies)'
                     : '')
-                + '.';
+                + agentCtx + '.';
         }
 
-        // Failure summaries by status
         String status = outcome.status;
         if (status == 'Dry_Run') {
             return prefix + 'Would assign via "' + bundle.developerName + '" — '
                 + condSummary
-                + ', ' + outcome.candidateCount + ' candidate(s) found.';
+                + ', ' + outcome.candidateCount + ' candidate(s) found'
+                + agentCtx + '.';
         }
 
         return prefix + 'No assignment via "' + bundle.developerName + '" — '
-            + outcome.errorMessage;
+            + outcome.errorMessage + agentCtx + '.';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LAYER 2b — Override Agent (Supervisor Manual Reassign)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description Executes a direct assignment to a specific agent, bypassing
+     *              candidate ranking and capability matching. Used by Supervisor
+     *              Dashboard for manual reassignment.
+     *
+     *              Validates:
+     *              • Override agent exists in the cached agent map
+     *              • Agent is not Offline
+     *              • request.recordId is populated
+     *
+     *              Skips: candidate query, AgentMatcher, Allow_Multiple gate.
+     *              Still: creates audit entry, publishes Platform Event, increments load.
+     *
+     * @param request     The routing request with overrideAgentId populated
+     * @param agentUserId Id of the requesting user (supervisor)
+     * @param entryPoint  Integration surface identifier
+     * @return RoutingResult describing the override outcome
+     */
+    private static RoutingResult executeOverride(
+        RoutingRequest request,
+        Id agentUserId,
+        String entryPoint
+    ) {
+        Boolean isDryRun = (request.dryRun == true);
+
+        // ── Validate recordId is present ────────────────────────────────
+        if (request.recordId == null) {
+            return RoutingResult.failure(
+                null,
+                'Override assignment requires a recordId.'
+            );
+        }
+
+        // ── Find override agent by Agent__c Id ─────────────────────────
+        // The cached agent map is keyed by User__c. Iterate to find by Id.
+        Map<Id, Agent__c> agentMap =
+            AgentCapabilitySelector.getActiveAgentsByUserId();
+        Agent__c overrideAgent = null;
+
+        for (Agent__c agent : agentMap.values()) {
+            if (agent.Id == request.overrideAgentId) {
+                overrideAgent = agent;
+                break;
+            }
+        }
+
+        if (overrideAgent == null) {
+            Logger.warn('Override failed: no active Agent__c with Id='
+                    + request.overrideAgentId)
+                .category(Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('executeOverride')
+                .log();
+            return RoutingResult.failure(
+                String.valueOf(request.recordId),
+                'Override agent not found or is inactive (Id='
+                + request.overrideAgentId + ').'
+            );
+        }
+
+        // ── Validate not Offline ────────────────────────────────────────
+        String overrideStatus = (String) overrideAgent.get('Availability_Status__c');
+        if (overrideStatus == 'Offline') {
+            Logger.warn('Override failed: agent is Offline | agentId='
+                    + overrideAgent.Id)
+                .category(Logger.Category.VALIDATION)
+                .inClass(CLS).inMethod('executeOverride')
+                .log();
+            return RoutingResult.failure(
+                String.valueOf(request.recordId),
+                'Override agent is Offline and cannot receive assignments.'
+            );
+        }
+
+        // ── Load config bundle for audit context ────────────────────────
+        // If configDeveloperName is specified, use it. Otherwise pick the
+        // first applicable bundle for the record's object type.
+        List<ConfigBundle> allBundles = ConfigLoader.loadActive();
+        ConfigBundle matchedBundle = null;
+
+        if (String.isNotBlank(request.configDeveloperName)) {
+            for (ConfigBundle b : allBundles) {
+                if (b.developerName == request.configDeveloperName) {
+                    matchedBundle = b;
+                    break;
+                }
+            }
+        }
+
+        // Fallback: use the first active bundle (for audit context only)
+        if (matchedBundle == null && !allBundles.isEmpty()) {
+            matchedBundle = allBundles[0];
+        }
+
+        // ── DryRun: return simulated outcome, skip all DML ─────────────
+        if (isDryRun) {
+            RoutingResult dryResult = RoutingResult.success(
+                String.valueOf(request.recordId),
+                String.valueOf(overrideAgent.User__c),
+                null,
+                0
+            );
+            dryResult.entryPoint = entryPoint;
+            dryResult.reasonSummary = '[Dry Run] Would override-assign to agent '
+                + overrideAgent.Id + '.';
+            return dryResult;
+        }
+
+        // ── Direct assignment DML ───────────────────────────────────────
+        // Query the record with FOR UPDATE lock, set owner, save.
+        String objectApiName = (matchedBundle != null)
+            ? matchedBundle.objectApiName
+            : Id.valueOf(request.recordId).getSObjectType().getDescribe().getName();
+        String ownerField = (matchedBundle != null)
+            ? matchedBundle.ownerFieldApiName
+            : 'OwnerId';
+
+        try {
+            String lockSoql = 'SELECT Id, ' + ownerField
+                + ' FROM ' + objectApiName
+                + ' WHERE Id = :recordId FOR UPDATE';
+            Id recId = Id.valueOf(request.recordId);
+            Map<String, Object> binds = new Map<String, Object>{
+                'recordId' => recId
+            };
+            List<SObject> locked = Database.queryWithBinds(
+                lockSoql, binds, AccessLevel.USER_MODE
+            );
+
+            if (locked.isEmpty()) {
+                return RoutingResult.failure(
+                    String.valueOf(request.recordId),
+                    'Record not found or inaccessible (Id='
+                    + request.recordId + ').'
+                );
+            }
+
+            SObject record = locked[0];
+            record.put(ownerField, overrideAgent.User__c);
+
+            Database.SaveResult sr = Database.update(
+                record, false, AccessLevel.USER_MODE
+            );
+
+            if (!sr.isSuccess()) {
+                String errors = '';
+                for (Database.Error err : sr.getErrors()) {
+                    errors += err.getMessage() + '; ';
+                }
+                Logger.error('Override DML failed | recordId='
+                        + request.recordId + ' | errors=' + errors)
+                    .category(Logger.Category.ASSIGNMENT)
+                    .inClass(CLS).inMethod('executeOverride')
+                    .log();
+                return RoutingResult.failure(
+                    String.valueOf(request.recordId),
+                    'Override assignment failed: ' + errors
+                );
+            }
+
+            // ── Audit + Platform Event ──────────────────────────────────
+            // Use outcomeDryRun factory (success=true). Status shows as
+            // Dry_Run in audit but the assignment is real — acceptable
+            // trade-off vs adding a new public factory method.
+            AssignmentResolver.AssignmentOutcome outcome =
+                AssignmentResolver.outcomeDryRun(
+                    Id.valueOf(request.recordId), 1
+                );
+
+            AuditLogger.AuditEntry auditEntry = AuditLogger.createEntry(
+                outcome, matchedBundle, overrideAgent.User__c, entryPoint, null
+            );
+            List<AuditLogger.AuditEntry> entries =
+                new List<AuditLogger.AuditEntry>{ auditEntry };
+
+            List<Id> logIds = AuditLogger.flush(entries);
+            RoutingEventPublisher.publishFromAudit(
+                entries, request, entryPoint, logIds
+            );
+
+            // ── Build result ────────────────────────────────────────────
+            RoutingResult rr = RoutingResult.success(
+                String.valueOf(request.recordId),
+                String.valueOf(overrideAgent.User__c),
+                (!logIds.isEmpty() && logIds[0] != null)
+                    ? String.valueOf(logIds[0]) : null,
+                0
+            );
+            rr.entryPoint = entryPoint;
+            rr.objectApiName = objectApiName;
+            rr.reasonSummary = 'Override-assigned to agent '
+                + overrideAgent.Id + ' by supervisor.';
+            rr.recordName = AssignmentSelector.queryRecordName(
+                objectApiName, request.recordId
+            );
+            return rr;
+
+        } catch (Exception ex) {
+            Logger.error('Override exception | recordId=' + request.recordId)
+                .category(Logger.Category.ASSIGNMENT)
+                .inClass(CLS).inMethod('executeOverride')
+                .withException(ex)
+                .log();
+            return RoutingResult.failure(
+                String.valueOf(request.recordId),
+                'Override failed: ' + ex.getMessage()
+            );
+        }
     }
 }

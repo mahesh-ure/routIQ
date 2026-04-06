@@ -37,6 +37,7 @@ public with sharing class ConfigBundle implements Comparable {
     public List<String> recordTypeDevNames;
     public List<String> selectFields;
     public Integer maxRetryAttempts;
+    public Boolean includeBusyAgents;
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ public with sharing class ConfigBundle implements Comparable {
         this.maxRetryAttempts = (config.Max_Retry_Attempts__c != null)
             ? config.Max_Retry_Attempts__c.intValue()
             : 1;
+        this.includeBusyAgents = (config.Include_Busy_Agents__c == true);
     }
 
     /**

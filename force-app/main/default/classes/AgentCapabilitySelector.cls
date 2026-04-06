@@ -74,7 +74,8 @@ public with sharing class AgentCapabilitySelector {
         cachedAgents = new Map<Id, Agent__c>();
 
         String soql = 'SELECT Id, User__c, Is_Active__c, Max_Capacity__c, '
-            + 'Current_Load__c, Last_Assigned__c '
+            + 'Current_Load__c, Last_Assigned__c, Availability_Status__c, '
+            + 'Status_Last_Changed__c '
             + 'FROM Agent__c '
             + 'WHERE Is_Active__c = :isActive '
             + 'AND User__c != NULL';
