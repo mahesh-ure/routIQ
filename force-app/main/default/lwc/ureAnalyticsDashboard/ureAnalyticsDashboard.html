@@ -1,0 +1,182 @@
+<template>
+    <!-- ── Page Header ──────────────────────────────────────────────── -->
+    <lightning-card title={label.TITLE} icon-name="standard:analytics">
+        <lightning-button
+            slot="actions"
+            label={label.REFRESH}
+            icon-name="utility:refresh"
+            onclick={handleRefresh}
+            disabled={isRefreshing}
+            variant="neutral"
+        ></lightning-button>
+
+        <div class="slds-var-p-around_medium">
+
+            <!-- ── Lens 1: Routing Velocity ─────────────────────────── -->
+            <article class="slds-card slds-var-m-bottom_medium">
+                <div class="slds-card__header slds-grid">
+                    <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                        <div class="slds-media__figure">
+                            <lightning-icon icon-name="utility:clock" size="small"></lightning-icon>
+                        </div>
+                        <div class="slds-media__body">
+                            <h2 class="slds-card__header-title slds-text-heading_small">{label.VELOCITY_TITLE}</h2>
+                            <p class="slds-text-body_small slds-text-color_weak">{label.VELOCITY_SUBTITLE}</p>
+                        </div>
+                    </header>
+                </div>
+                <div class="slds-card__body slds-card__body_inner">
+                    <template if:true={velocityError}>
+                        <div class="slds-illustration slds-illustration_small">
+                            <p class="slds-text-color_error">{label.ERROR_MSG}</p>
+                        </div>
+                    </template>
+                    <template if:false={velocityError}>
+                        <template if:true={hasVelocityData}>
+                            <!-- Summary metrics -->
+                            <div class="slds-grid slds-gutters slds-var-m-bottom_medium">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <div class="slds-box slds-box_x-small slds-text-align_center metric-box">
+                                        <p class="slds-text-title_caps slds-text-color_weak">{label.AVG_DURATION}</p>
+                                        <p class="slds-text-heading_large metric-value">{overallAvgDuration}<span class="slds-text-body_small"> {label.MS_UNIT}</span></p>
+                                    </div>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <div class="slds-box slds-box_x-small slds-text-align_center metric-box">
+                                        <p class="slds-text-title_caps slds-text-color_weak">{label.ASSIGNMENTS}</p>
+                                        <p class="slds-text-heading_large metric-value">{totalRoutings}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Daily trend table -->
+                            <div class="slds-scrollable_y" style="max-height: 300px;">
+                                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped" role="grid" aria-label={label.VELOCITY_TITLE}>
+                                    <thead>
+                                        <tr class="slds-line-height_reset">
+                                            <th scope="col"><div class="slds-truncate">Date</div></th>
+                                            <th scope="col"><div class="slds-truncate">{label.AVG_DURATION} ({label.MS_UNIT})</div></th>
+                                            <th scope="col"><div class="slds-truncate">{label.ASSIGNMENTS}</div></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={velocityData} for:item="dp">
+                                            <tr key={dp.routedDay}>
+                                                <td><div class="slds-truncate">{dp.routedDay}</div></td>
+                                                <td><div class="slds-truncate">{dp.avgDurationMs}</div></td>
+                                                <td><div class="slds-truncate">{dp.routingCount}</div></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                        <template if:false={hasVelocityData}>
+                            <p class="slds-text-color_weak slds-text-align_center slds-var-p-around_medium">{label.NO_DATA}</p>
+                        </template>
+                    </template>
+                </div>
+            </article>
+
+            <!-- ── Lens 2: SLA Compliance ───────────────────────────── -->
+            <article class="slds-card slds-var-m-bottom_medium">
+                <div class="slds-card__header slds-grid">
+                    <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                        <div class="slds-media__figure">
+                            <lightning-icon icon-name="utility:check" size="small"></lightning-icon>
+                        </div>
+                        <div class="slds-media__body">
+                            <h2 class="slds-card__header-title slds-text-heading_small">{label.SLA_TITLE}</h2>
+                            <p class="slds-text-body_small slds-text-color_weak">{label.SLA_SUBTITLE}</p>
+                        </div>
+                    </header>
+                </div>
+                <div class="slds-card__body slds-card__body_inner">
+                    <template if:true={slaError}>
+                        <p class="slds-text-color_error">{label.ERROR_MSG}</p>
+                    </template>
+                    <template if:false={slaError}>
+                        <!-- Overall compliance metric -->
+                        <div class="slds-box slds-box_x-small slds-text-align_center slds-var-m-bottom_medium metric-box">
+                            <p class="slds-text-title_caps slds-text-color_weak">{label.COMPLIANCE_RATE}</p>
+                            <p class="slds-text-heading_large metric-value">{overallComplianceRate}<span class="slds-text-body_small">%</span></p>
+                        </div>
+                        <!-- Tab toggle -->
+                        <div class="slds-button-group slds-var-m-bottom_small" role="group">
+                            <button
+                                class={configTabClass}
+                                data-tab="config"
+                                onclick={handleSlaTabSwitch}
+                            >{label.BY_CONFIG}</button>
+                            <button
+                                class={agentTabClass}
+                                data-tab="agent"
+                                onclick={handleSlaTabSwitch}
+                            >{label.BY_AGENT}</button>
+                        </div>
+                        <template if:true={hasSlaData}>
+                            <lightning-datatable
+                                key-field="id"
+                                data={activeSlaData}
+                                columns={slaColumns}
+                                hide-checkbox-column
+                            ></lightning-datatable>
+                        </template>
+                        <template if:false={hasSlaData}>
+                            <p class="slds-text-color_weak slds-text-align_center slds-var-p-around_medium">{label.NO_DATA}</p>
+                        </template>
+                    </template>
+                </div>
+            </article>
+
+            <!-- ── Lens 3: Agent Utilisation ─────────────────────────── -->
+            <article class="slds-card">
+                <div class="slds-card__header slds-grid">
+                    <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                        <div class="slds-media__figure">
+                            <lightning-icon icon-name="utility:people" size="small"></lightning-icon>
+                        </div>
+                        <div class="slds-media__body">
+                            <h2 class="slds-card__header-title slds-text-heading_small">{label.UTIL_TITLE}</h2>
+                            <p class="slds-text-body_small slds-text-color_weak">{label.UTIL_SUBTITLE}</p>
+                        </div>
+                    </header>
+                </div>
+                <div class="slds-card__body slds-card__body_inner">
+                    <template if:true={utilisationError}>
+                        <p class="slds-text-color_error">{label.ERROR_MSG}</p>
+                    </template>
+                    <template if:false={utilisationError}>
+                        <template if:true={hasUtilisationSummary}>
+                            <div class="slds-scrollable_y" style="max-height: 400px;">
+                                <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped" role="grid" aria-label={label.UTIL_TITLE}>
+                                    <thead>
+                                        <tr class="slds-line-height_reset">
+                                            <th scope="col"><div class="slds-truncate">{label.BY_AGENT}</div></th>
+                                            <th scope="col"><div class="slds-truncate">Total {label.ASSIGNMENTS}</div></th>
+                                            <th scope="col"><div class="slds-truncate">Active Days</div></th>
+                                            <th scope="col"><div class="slds-truncate">Avg/Day</div></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template for:each={utilisationSummary} for:item="agent">
+                                            <tr key={agent.id}>
+                                                <td><div class="slds-truncate">{agent.agentName}</div></td>
+                                                <td><div class="slds-truncate">{agent.totalAssigned}</div></td>
+                                                <td><div class="slds-truncate">{agent.daysActive}</div></td>
+                                                <td><div class="slds-truncate">{agent.avgPerDay}</div></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                        <template if:false={hasUtilisationSummary}>
+                            <p class="slds-text-color_weak slds-text-align_center slds-var-p-around_medium">{label.NO_DATA}</p>
+                        </template>
+                    </template>
+                </div>
+            </article>
+
+        </div>
+    </lightning-card>
+</template>

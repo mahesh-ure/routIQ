@@ -75,6 +75,12 @@ public with sharing class RoutingEngine {
         // continues to the next bundle.
         // ═══════════════════════════════════════════════════════════════════
 
+        // ─── Analytics: capture request receipt time (P2 Feature 1) ─────
+        // Used by AuditLogger.enrichWithAnalytics() to compute
+        // Assignment_Duration_Ms__c = (flush time) - requestStartMs.
+        // Measured from execute() entry, NOT from record creation.
+        Long requestStartMs = System.currentTimeMillis();
+
         // ─── Phase 1: Validate Request (0 SOQL, 0 DML) ─────────────────
         List<String> validationErrors = request.validate();
         if (!validationErrors.isEmpty()) {
@@ -289,7 +295,18 @@ public with sharing class RoutingEngine {
             // ─── Phase 5: Audit + Events ────────────────────────────────
             // DryRun: skip ALL side effects — zero DML, zero events.
             if (!isDryRun) {
-                // ─── Phase 5a: Flush Audit Entries (1 DML) ──────────────
+                // ─── Phase 5a: Enrich with analytics fields (0 SOQL, 0 DML)
+                // Computes Assignment_Duration_Ms__c, SLA_Met__c, Agent_Name__c
+                // on each audit record before bulk insert. Uses cached agent
+                // name from Phase 2 — zero additional queries.
+                String agentDisplayName = (currentAgent.getSObject('User__r') != null)
+                    ? (String) currentAgent.getSObject('User__r').get('Name')
+                    : null;
+                AuditLogger.enrichWithAnalytics(
+                    auditEntries, qualifiedBundles, requestStartMs, agentDisplayName
+                );
+
+                // ─── Phase 5b: Flush Audit Entries (1 DML) ──────────────
                 List<Id> logIds = AuditLogger.flush(auditEntries);
 
                 if (finalResult != null
@@ -302,7 +319,7 @@ public with sharing class RoutingEngine {
                         : null;
                 }
 
-                // ─── Phase 5b: Publish Platform Events (1 DML) ─────────
+                // ─── Phase 5c: Publish Platform Events (1 DML) ─────────
                 RoutingEventPublisher.publishFromAudit(
                     auditEntries, request, entryPoint, logIds
                 );

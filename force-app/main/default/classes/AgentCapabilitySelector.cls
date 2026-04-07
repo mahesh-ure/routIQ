@@ -73,7 +73,7 @@ public with sharing class AgentCapabilitySelector {
 
         cachedAgents = new Map<Id, Agent__c>();
 
-        String soql = 'SELECT Id, User__c, Is_Active__c, Max_Capacity__c, '
+        String soql = 'SELECT Id, User__c, User__r.Name, Is_Active__c, Max_Capacity__c, '
             + 'Current_Load__c, Last_Assigned__c, Availability_Status__c, '
             + 'Status_Last_Changed__c '
             + 'FROM Agent__c '

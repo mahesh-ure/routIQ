@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agent_Name__c</fullName>
+    <description>Display name of the assigned agent. Denormalized from the Assigned_To__c User record at insert time for reporting performance — avoids User lookup joins in aggregate analytics queries. Null when no agent was assigned (routing failure). Used by the Analytics Dashboard agent utilisation lens.</description>
+    <externalId>false</externalId>
+    <label>Agent Name</label>
+    <length>255</length>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>
