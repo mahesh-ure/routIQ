@@ -90,6 +90,38 @@ global with sharing class RoutingRequest {
      */
     global Boolean escalation;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LAYER 2 — Request normalization (configDevName coalescing + defaults)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description Normalizes request fields before engine dispatch. Called once by
+     *              RoutingService.executeSingle() before validate() and engine.execute().
+     *
+     *              Operations:
+     *              • Coalesces configDevName → configDeveloperName (short-form alias)
+     *              • Defaults dryRun to false when null
+     *              • Defaults escalation to false when null
+     *
+     *              Idempotent — safe to call multiple times.
+     */
+    global void normalize() {
+        // Coalesce short-form alias → canonical field
+        if (String.isBlank(this.configDeveloperName)
+            && String.isNotBlank(this.configDevName)
+        ) {
+            this.configDeveloperName = this.configDevName;
+        }
+
+        // Boolean defaults — null → false for downstream null-safety
+        if (this.dryRun == null) {
+            this.dryRun = false;
+        }
+        if (this.escalation == null) {
+            this.escalation = false;
+        }
+    }
+
     /**
      * @description Validates structural correctness of this request. Does not perform
      *              schema validation (that belongs in the engine layer).

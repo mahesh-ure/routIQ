@@ -1,0 +1,144 @@
+<template>
+    <lightning-card title={label.title} icon-name="standard:work_order">
+
+        <!-- ── Agent Not Found Error ─────────────────────────────────── -->
+        <template lwc:if={agentError}>
+            <div class="slds-p-around_medium">
+                <lightning-illustration
+                    size="small"
+                    heading={label.emptyTitle}>
+                    <p class="slds-text-body_regular">{label.emptyBody}</p>
+                </lightning-illustration>
+            </div>
+        </template>
+
+        <!-- ── Agent Panel ───────────────────────────────────────────── -->
+        <template lwc:if={hasAgent}>
+
+            <!-- ── Header: Status + Metrics ──────────────────────────── -->
+            <div class="slds-p-horizontal_medium slds-p-top_small">
+                <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-center">
+
+                    <!-- Availability Toggle -->
+                    <div class="slds-col slds-size_1-of-2">
+                        <lightning-combobox
+                            label={label.statusLabel}
+                            value={agentStatus}
+                            options={statusOptions}
+                            variant="label-hidden"
+                            onchange={handleStatusChange}>
+                        </lightning-combobox>
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="slds-col slds-size_1-of-2 slds-text-align_right">
+                        <span class={statusBadgeClass}>{agentStatus}</span>
+                    </div>
+                </div>
+
+                <!-- Metrics Row -->
+                <div class="slds-grid slds-gutters_x-small slds-m-top_small">
+                    <div class="slds-col slds-size_1-of-2">
+                        <div class="metric-card">
+                            <span class="metric-label">{label.currentLoad}</span>
+                            <span class="metric-value">{loadDisplay}</span>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2">
+                        <div class="metric-card">
+                            <span class="metric-label">{label.queueDepth}</span>
+                            <span class="metric-value">{queueDisplay}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-p-around_medium">
+
+                <!-- ── Active Work Assignment ────────────────────────── -->
+                <template lwc:if={hasWork}>
+                    <div class="work-card slds-box slds-theme_shade slds-m-bottom_small">
+
+                        <!-- Record Link -->
+                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_x-small">
+                            <lightning-icon
+                                icon-name="utility:success"
+                                size="x-small"
+                                variant="success"
+                                class="slds-m-right_x-small">
+                            </lightning-icon>
+                            <div>
+                                <p class="slds-text-body_small slds-text-color_weak">{label.assigned}</p>
+                                <a href={recordUrl} onclick={handleNavigate}>
+                                    <strong>{displayName}</strong>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- SLA Countdown -->
+                        <template lwc:if={hasSla}>
+                            <div class="sla-section slds-m-top_x-small">
+                                <p class="slds-text-body_small slds-text-color_weak">
+                                    {label.slaRemaining}
+                                </p>
+                                <div class={slaColorClass}>
+                                    <span class="sla-timer">{slaText}</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- ── Empty State ───────────────────────────────────── -->
+                <template lwc:elseif={isRouting}>
+                    <div class="slds-align_absolute-center slds-m-vertical_medium">
+                        <lightning-spinner
+                            alternative-text={label.loadingWork}
+                            size="small">
+                        </lightning-spinner>
+                    </div>
+                </template>
+
+                <template lwc:else>
+                    <div class="empty-state slds-text-align_center slds-m-vertical_medium">
+                        <lightning-icon
+                            icon-name="utility:inbox"
+                            size="large"
+                            class="slds-m-bottom_small empty-icon">
+                        </lightning-icon>
+                        <p class="slds-text-heading_small">{label.emptyTitle}</p>
+                        <p class="slds-text-body_regular slds-text-color_weak slds-m-top_xx-small">
+                            {label.emptyBody}
+                        </p>
+                    </div>
+                </template>
+
+                <!-- ── Action Buttons ────────────────────────────────── -->
+                <div class="slds-grid slds-gutters_x-small slds-m-top_small">
+                    <div class="slds-col">
+                        <lightning-button
+                            label={nextButtonLabel}
+                            variant="brand"
+                            icon-name="utility:forward"
+                            onclick={handleGetNextWork}
+                            disabled={isNextDisabled}
+                            class="full-width">
+                        </lightning-button>
+                    </div>
+                    <template lwc:if={hasWork}>
+                        <div class="slds-col slds-shrink-none">
+                            <lightning-button
+                                label={deferButtonLabel}
+                                variant="neutral"
+                                icon-name="utility:undo"
+                                onclick={handleDefer}
+                                disabled={isDeferDisabled}>
+                            </lightning-button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+    </lightning-card>
+</template>

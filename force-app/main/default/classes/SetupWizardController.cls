@@ -312,11 +312,12 @@ public with sharing class SetupWizardController {
             throw new AuraHandledException('Unable to determine SObject type from record ID.');
         }
 
-        // Call RoutingService — dryRun prevents all side effects
+        // Call RoutingService — dryRun prevents all side effects (Layer 2)
         RoutingResult result = RoutingService.getNextRecord(
             request.objectApiName,
             request.recordId,
-            request.configDevName
+            request.configDevName,
+            true  // dryRun — simulate without DML
         );
 
         SimulateResult sr = new SimulateResult();

@@ -101,7 +101,8 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
             const result = await getNextRecord({
                 objectApiName: null,
                 recordId: null,
-                configDeveloperName: null
+                configDeveloperName: null,
+                dryRun: false
             });
 
             this.lastResult = result;

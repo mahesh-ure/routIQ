@@ -42,9 +42,17 @@ public with sharing class AgentMatcher {
         /** Details of mandatory mismatches (for exception/audit). */
         public Map<String, String> missingCapabilities { get; private set; }
 
+        /**
+         * Layer 4: Skill match traces — one per evaluated Routing_Skill_Mapping__mdt.
+         * traceSource='SKILL_MATCH'. Consumed by RoutingEngine to append to
+         * the overall conditionTraces list on RoutingResult.
+         */
+        public List<RoutingConditionTrace> skillTraces { get; private set; }
+
         @TestVisible
         private MatchResult() {
             this.missingCapabilities = new Map<String, String>();
+            this.skillTraces = new List<RoutingConditionTrace>();
         }
     }
 
@@ -144,8 +152,9 @@ public with sharing class AgentMatcher {
             agentCaps = new Map<String, Set<String>>();
         }
 
-        // ─── Evaluate mandatory conditions ──────────────────────────────
+        // ─── Evaluate mandatory conditions + build skill traces (Layer 4) ──
         Map<String, String> missingCaps = new Map<String, String>();
+        List<RoutingConditionTrace> skillTraces = new List<RoutingConditionTrace>();
 
         for (Routing_Skill_Mapping__mdt cond : matchConditions) {
             if (cond.Is_Mandatory__c != true) {
@@ -157,7 +166,11 @@ public with sharing class AgentMatcher {
             Object fieldValue = safeGetField(workRecord, fieldApiName);
 
             if (fieldValue == null) {
-                continue; // Null field on record = condition not applicable
+                // Null field = condition not applicable — trace as passed (N/A)
+                skillTraces.add(buildSkillTrace(
+                    cond, '', true, agentCaps
+                ));
+                continue;
             }
 
             String recordValue = String.valueOf(fieldValue).trim();
@@ -166,8 +179,14 @@ public with sharing class AgentMatcher {
             String capDevName = resolveCapabilityDevName(cond);
             Set<String> agentValues = agentCaps.get(capDevName);
 
-            if (agentValues == null || !agentValues.contains(recordValue)) {
-                // Get human-readable label for error message
+            Boolean matched = (agentValues != null && agentValues.contains(recordValue));
+
+            // Layer 4: Build skill trace regardless of match outcome
+            skillTraces.add(buildSkillTrace(
+                cond, recordValue, matched, agentCaps
+            ));
+
+            if (!matched) {
                 String capLabel = resolveCapabilityLabel(cond);
                 missingCaps.put(capLabel, recordValue);
             }
@@ -182,10 +201,16 @@ public with sharing class AgentMatcher {
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
+
+            // Attach traces to a no-match result before throwing
+            MatchResult noMatch = resultNoMatch(missingCaps);
+            noMatch.skillTraces = skillTraces;
             throw CapabilityMismatchException.create(configDevName, missingCaps);
         }
 
-        return resultMatched(agent);
+        MatchResult matched = resultMatched(agent);
+        matched.skillTraces = skillTraces;
+        return matched;
     }
 
     /**
@@ -317,5 +342,48 @@ public with sharing class AgentMatcher {
             return cond.Agent_Skill__r.Label__c;
         }
         return resolveCapabilityDevName(cond);
+    }
+
+    // =========================================================================
+    // LAYER 4 -- Skill Match Trace Builder
+    // =========================================================================
+
+    /**
+     * @description Builds a RoutingConditionTrace with traceSource='SKILL_MATCH' for
+     *              a single Routing_Skill_Mapping__mdt evaluation. Captures the skill
+     *              dimension name, what the record required, what the agent has, and
+     *              whether the match passed.
+     *
+     * @param cond        The skill mapping being evaluated
+     * @param recordValue The value from the work record's field (blank if null)
+     * @param passed      Whether the agent's skills contain the required value
+     * @param agentCaps   The agent's merged capability map (skill dev name -> values)
+     * @return RoutingConditionTrace with traceSource='SKILL_MATCH'
+     */
+    private static RoutingConditionTrace buildSkillTrace(
+        Routing_Skill_Mapping__mdt cond,
+        String recordValue,
+        Boolean passed,
+        Map<String, Set<String>> agentCaps
+    ) {
+        String capDevName = resolveCapabilityDevName(cond);
+        String capLabel = resolveCapabilityLabel(cond);
+
+        // Expected = agent's values for this skill dimension
+        Set<String> agentValues = agentCaps.get(capDevName);
+        String expectedValue = (agentValues != null && !agentValues.isEmpty())
+            ? String.join(new List<String>(agentValues), ', ')
+            : '(none)';
+
+        RoutingConditionTrace trace = RoutingConditionTrace.create(
+            cond.Field_API_Name__c,
+            'SKILL_MATCH',
+            expectedValue,
+            recordValue,
+            passed
+        );
+        trace.traceSource = 'SKILL_MATCH';
+
+        return trace;
     }
 }

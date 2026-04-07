@@ -401,4 +401,160 @@
         <value>Step {0} of {1}</value>
     </labels>
 
+    <!-- ── Agent Work Panel: Section Titles ─────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Work Panel card title</shortDescription>
+        <value>My Work</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelQueueDepth</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Queue depth badge label</shortDescription>
+        <value>In Queue</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelCurrentLoad</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Current load indicator label</shortDescription>
+        <value>My Load</value>
+    </labels>
+
+    <!-- ── Agent Work Panel: Buttons ─────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelDefer</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer work button label</shortDescription>
+        <value>Defer</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferring</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Button label while defer in progress</shortDescription>
+        <value>Deferring...</value>
+    </labels>
+
+    <!-- ── Agent Work Panel: Status ──────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelOnline</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Online status label</shortDescription>
+        <value>Online</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelBusy</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Busy status label</shortDescription>
+        <value>Busy</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelAway</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Away status label</shortDescription>
+        <value>Away</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelOffline</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Offline status label</shortDescription>
+        <value>Offline</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelStatusLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Status toggle section label</shortDescription>
+        <value>Availability</value>
+    </labels>
+
+    <!-- ── Agent Work Panel: SLA ─────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelSlaRemaining</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA time remaining label</shortDescription>
+        <value>SLA Remaining</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelSlaExpired</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA expired message</shortDescription>
+        <value>SLA Expired</value>
+    </labels>
+
+    <!-- ── Agent Work Panel: Empty / Error States ─────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelEmptyTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state heading when no work assigned</shortDescription>
+        <value>No Work Assigned</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelEmptyBody</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state body text</shortDescription>
+        <value>Click Next Best Action to pull your next work item.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferSuccess</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Toast title after successful defer</shortDescription>
+        <value>Work Deferred</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Toast title for defer failures</shortDescription>
+        <value>Defer Failed</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelNoAgent</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error when no Agent record found</shortDescription>
+        <value>No agent record found for your user. Contact your administrator.</value>
+    </labels>
+
+    <!-- ── Agent Work Panel: Accessibility ─────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_WorkPanelLoadingWork</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text while fetching work</shortDescription>
+        <value>Finding next work item</value>
+    </labels>
+
 </CustomLabels>

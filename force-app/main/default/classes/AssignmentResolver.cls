@@ -170,6 +170,29 @@ public with sharing class AssignmentResolver {
     }
 
     /**
+     * @description Creates outcome for a dry-run simulation. Reports what WOULD have
+     *              been assigned without performing any DML. Used by Layer 2 dryRun
+     *              support — the engine runs full matching but skips lock + assign.
+     *
+     * @param recordId       The candidate record that would have been assigned
+     * @param candidateCount Total candidates returned by the query
+     * @return Simulated success outcome with status 'Dry_Run'
+     */
+    public static AssignmentOutcome outcomeDryRun(
+        Id recordId,
+        Integer candidateCount
+    ) {
+        AssignmentOutcome o = new AssignmentOutcome();
+        o.recordId = recordId;
+        o.success = true;
+        o.lockContention = false;
+        o.retryCount = 0;
+        o.candidateCount = candidateCount;
+        o.status = 'Dry_Run';
+        return o;
+    }
+
+    /**
      * @description Creates outcome for capacity exceeded failures.
      *
      * @param errorMessage Description of the capacity limit

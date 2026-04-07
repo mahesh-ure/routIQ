@@ -136,30 +136,32 @@ global with sharing class RoutingService {
      *                const result = await routeRecord({
      *                    objectApiName: 'Case',
      *                    recordId: null,
-     *                    configDeveloperName: null
+     *                    configDeveloperName: null,
+     *                    dryRun: false
      *                });
      *
-     *              Uses discrete parameters (not a JSON string) for clean LWC
-     *              developer experience — no manual serialization needed on the
-     *              client side.
+     *              Layer 2: Added dryRun parameter. When true, the engine runs full
+     *              matching but skips ALL side effects (no DML, no events). Returns
+     *              conditionTraces and reasonSummary for simulation display.
      *
-     *              Not cacheable — this method mutates data (assigns record ownership).
-     *
-     * @param objectApiName     SObject API name (optional — null for "Get Next" across all)
-     * @param recordId          Specific record to route (optional)
+     * @param objectApiName       SObject API name (optional — null for "Get Next" across all)
+     * @param recordId            Specific record to route (optional)
      * @param configDeveloperName Target a specific routing config (optional)
+     * @param dryRun              True to simulate without side effects (optional, default false)
      * @return RoutingResult with assignment details or failure reason
      */
     @AuraEnabled
     global static RoutingResult getNextRecord(
         String objectApiName,
         String recordId,
-        String configDeveloperName
+        String configDeveloperName,
+        Boolean dryRun
     ) {
         RoutingRequest request = new RoutingRequest();
         request.objectApiName = objectApiName;
         request.recordId = recordId;
         request.configDeveloperName = configDeveloperName;
+        request.dryRun = dryRun;
 
         return executeSingle(request, 'LWC');
     }
@@ -186,6 +188,9 @@ global with sharing class RoutingService {
     ) {
         Id agentUserId = UserInfo.getUserId();
 
+        // ── Layer 2: Normalize request (coalesce configDevName, default booleans) ──
+        request.normalize();
+
         // ── Logger lifecycle: INIT ──────────────────────────────────────
         Logger.init(entryPoint, agentUserId);
 
@@ -196,6 +201,7 @@ global with sharing class RoutingService {
                 + ' | object=' + request.objectApiName
                 + ' | recordId=' + request.recordId
                 + ' | config=' + request.configDeveloperName
+                + ' | dryRun=' + request.dryRun
                 + ' | v=' + Logger.FRAMEWORK_VERSION)
             .category(Logger.Category.ENGINE)
             .inClass('RoutingService').inMethod('executeSingle')

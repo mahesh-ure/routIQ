@@ -2,12 +2,12 @@
  * @description Trace record for a single routing condition evaluation. Captures what
  *              the engine tested, what it expected, what it found, and whether the
  *              condition passed. Populated during condition matching regardless of
- *              dryRun — callers use this for simulation display and debugging.
+ *              dryRun -- callers use this for simulation display and debugging.
  *
- *              Created by RoutingEngine during condition evaluation (Layer 2).
+ *              Created by RoutingEngine during condition evaluation (Layer 2/3).
  *              Consumed by:
  *              - RoutingResult.conditionTraces (returned to all callers)
- *              - Setup Wizard simulate step (Layer 7 — dryRun display)
+ *              - Setup Wizard simulate step (Layer 7 -- dryRun display)
  *              - P2 Simulator (future)
  *
  *              Standalone class (not inner) because:
@@ -57,13 +57,48 @@ global with sharing class RoutingConditionTrace {
     @AuraEnabled
     global Boolean passed;
 
-    // ─── Private constructor — use factory method ────────────────────────────
+    // =========================================================================
+    // LAYER 3 -- Enhanced condition trace fields
+    // =========================================================================
+
+    /**
+     * @description Condition group number from Routing_Condition__mdt.Condition_Group__c.
+     *              Null/0 = root-level AND condition. 1,2,3... = grouped (AND within group,
+     *              OR between groups). Used by UI to visually group conditions.
+     */
+    @AuraEnabled
+    global Decimal conditionGroup;
+
+    /**
+     * @description Value type of the condition (String, Number, Boolean, Date, DateTime).
+     *              Sourced from Routing_Condition__mdt.Value_Type__c. Used by UI to
+     *              format expected/actual values correctly.
+     */
+    @AuraEnabled
+    global String valueType;
+
+    /**
+     * @description Sort order of the condition within its config. Sourced from
+     *              Routing_Condition__mdt.Sort_Order__c. Allows UI to display conditions
+     *              in the same order the admin configured them.
+     */
+    @AuraEnabled
+    global Decimal sortOrder;
+
+    /**
+     * @description Source of the trace: 'CONDITION' for SOQL WHERE clause conditions,
+     *              'SKILL_MATCH' for agent skill matching (Layer 4).
+     */
+    @AuraEnabled
+    global String traceSource;
+
+    // --- Private constructor -- use factory method ----------------------------
 
     @TestVisible
     private RoutingConditionTrace() {
     }
 
-    // ─── Factory ─────────────────────────────────────────────────────────────
+    // --- Factory -------------------------------------------------------------
 
     /**
      * @description Creates a fully populated trace record. Factory pattern enforces
@@ -74,7 +109,7 @@ global with sharing class RoutingConditionTrace {
      * @param expectedValue Expected value(s) from condition metadata
      * @param actualValue   Actual value from the work record (String-converted)
      * @param passed        Whether the condition was satisfied
-     * @return Fully populated RoutingConditionTrace
+     * @return Fully populated RoutingConditionTrace with traceSource='CONDITION'
      */
     global static RoutingConditionTrace create(
         String fieldApiName,
@@ -89,6 +124,41 @@ global with sharing class RoutingConditionTrace {
         trace.expectedValue = expectedValue;
         trace.actualValue = (actualValue != null) ? actualValue : '';
         trace.passed = passed;
+        trace.traceSource = 'CONDITION';
+        return trace;
+    }
+
+    /**
+     * @description Layer 3: Creates a fully populated trace with condition group metadata.
+     *              Used by RoutingEngine.buildConditionTraces() when condition metadata
+     *              is available for richer trace output.
+     *
+     * @param fieldApiName   API name of the evaluated field
+     * @param operator       Operator used (IN, EQUALS, GREATER_THAN, etc.)
+     * @param expectedValue  Expected value(s) from condition metadata
+     * @param actualValue    Actual value from the work record (String-converted)
+     * @param passed         Whether the condition was satisfied
+     * @param conditionGroup Condition group number (null/0=root, 1+= grouped)
+     * @param valueType      Value type (String, Number, Boolean, Date, DateTime)
+     * @param sortOrder      Condition sort order within the config
+     * @return Fully populated RoutingConditionTrace with all metadata
+     */
+    global static RoutingConditionTrace createWithMetadata(
+        String fieldApiName,
+        String operator,
+        String expectedValue,
+        String actualValue,
+        Boolean passed,
+        Decimal conditionGroup,
+        String valueType,
+        Decimal sortOrder
+    ) {
+        RoutingConditionTrace trace = create(
+            fieldApiName, operator, expectedValue, actualValue, passed
+        );
+        trace.conditionGroup = conditionGroup;
+        trace.valueType = valueType;
+        trace.sortOrder = sortOrder;
         return trace;
     }
 }

@@ -1,0 +1,456 @@
+/**
+ * @description Layer 5 -- Agent Work Panel LWC. Primary agent-facing component
+ *              for the pull-model routing workflow:
+ *
+ *              Get Work -> View SLA Countdown -> Defer (or complete)
+ *
+ *              Features:
+ *              - Availability toggle (Online/Busy/Away/Offline)
+ *              - Next Best Action button (delegates to RoutingService)
+ *              - SLA countdown timer (JS-only, zero server calls per tick)
+ *              - Defer button (resets configured field, publishes DEFERRED event)
+ *              - Queue depth indicator
+ *              - Current load / capacity display
+ *
+ *              Design:
+ *              - All text via Custom Labels (i18n)
+ *              - No lwc:dom="manual", no innerHTML (XSS-safe)
+ *              - Imperative Apex calls (mutations, not reads)
+ *              - connectedCallback / disconnectedCallback for timer lifecycle
+ *
+ * @group UI
+ */
+import { LightningElement, track, wire } from 'lwc';
+import { NavigationMixin } from 'lightning/navigation';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { refreshApex } from '@salesforce/apex';
+
+// ── Apex Methods ────────────────────────────────────────────────────────────
+import getAgentContext from '@salesforce/apex/AgentWorkPanelController.getAgentContext';
+import getNextWork from '@salesforce/apex/AgentWorkPanelController.getNextWork';
+import deferWork from '@salesforce/apex/AgentWorkPanelController.deferWork';
+import getQueueDepth from '@salesforce/apex/AgentWorkPanelController.getQueueDepth';
+import updateAgentStatus from '@salesforce/apex/AgentAvailabilityController.updateAgentStatus';
+
+// ── Custom Labels (i18n) ────────────────────────────────────────────────────
+import LABEL_TITLE from '@salesforce/label/c.URE_WorkPanelTitle';
+import LABEL_QUEUE_DEPTH from '@salesforce/label/c.URE_WorkPanelQueueDepth';
+import LABEL_CURRENT_LOAD from '@salesforce/label/c.URE_WorkPanelCurrentLoad';
+import LABEL_NEXT_BEST_ACTION from '@salesforce/label/c.URE_NextBestAction';
+import LABEL_ROUTING from '@salesforce/label/c.URE_Routing';
+import LABEL_DEFER from '@salesforce/label/c.URE_WorkPanelDefer';
+import LABEL_DEFERRING from '@salesforce/label/c.URE_WorkPanelDeferring';
+import LABEL_ONLINE from '@salesforce/label/c.URE_WorkPanelOnline';
+import LABEL_BUSY from '@salesforce/label/c.URE_WorkPanelBusy';
+import LABEL_AWAY from '@salesforce/label/c.URE_WorkPanelAway';
+import LABEL_OFFLINE from '@salesforce/label/c.URE_WorkPanelOffline';
+import LABEL_STATUS from '@salesforce/label/c.URE_WorkPanelStatusLabel';
+import LABEL_SLA_REMAINING from '@salesforce/label/c.URE_WorkPanelSlaRemaining';
+import LABEL_SLA_EXPIRED from '@salesforce/label/c.URE_WorkPanelSlaExpired';
+import LABEL_EMPTY_TITLE from '@salesforce/label/c.URE_WorkPanelEmptyTitle';
+import LABEL_EMPTY_BODY from '@salesforce/label/c.URE_WorkPanelEmptyBody';
+import LABEL_DEFER_SUCCESS from '@salesforce/label/c.URE_WorkPanelDeferSuccess';
+import LABEL_DEFER_ERROR from '@salesforce/label/c.URE_WorkPanelDeferError';
+import LABEL_ROUTING_ERROR from '@salesforce/label/c.URE_RoutingError';
+import LABEL_RECORD_ASSIGNED from '@salesforce/label/c.URE_RecordAssigned';
+import LABEL_NO_RECORDS from '@salesforce/label/c.URE_NoRecordsAvailable';
+import LABEL_UNEXPECTED_ERROR from '@salesforce/label/c.URE_UnexpectedError';
+import LABEL_LOADING_WORK from '@salesforce/label/c.URE_WorkPanelLoadingWork';
+import LABEL_ASSIGNED from '@salesforce/label/c.URE_Assigned';
+
+export default class UreAgentWorkPanel extends NavigationMixin(LightningElement) {
+
+    // ─── Labels exposed to template ─────────────────────────────────────
+    label = {
+        title: LABEL_TITLE,
+        queueDepth: LABEL_QUEUE_DEPTH,
+        currentLoad: LABEL_CURRENT_LOAD,
+        nextBestAction: LABEL_NEXT_BEST_ACTION,
+        routing: LABEL_ROUTING,
+        defer: LABEL_DEFER,
+        deferring: LABEL_DEFERRING,
+        online: LABEL_ONLINE,
+        busy: LABEL_BUSY,
+        away: LABEL_AWAY,
+        offline: LABEL_OFFLINE,
+        statusLabel: LABEL_STATUS,
+        slaRemaining: LABEL_SLA_REMAINING,
+        slaExpired: LABEL_SLA_EXPIRED,
+        emptyTitle: LABEL_EMPTY_TITLE,
+        emptyBody: LABEL_EMPTY_BODY,
+        deferSuccess: LABEL_DEFER_SUCCESS,
+        deferError: LABEL_DEFER_ERROR,
+        routingError: LABEL_ROUTING_ERROR,
+        recordAssigned: LABEL_RECORD_ASSIGNED,
+        noRecords: LABEL_NO_RECORDS,
+        unexpectedError: LABEL_UNEXPECTED_ERROR,
+        loadingWork: LABEL_LOADING_WORK,
+        assigned: LABEL_ASSIGNED
+    };
+
+    // ─── Design attributes (set from App Builder) ───────────────────────
+    /** @api Optional: lock to a specific routing config */
+    configDevName = null;
+
+    // ─── Agent context state ────────────────────────────────────────────
+    @track agentContext = null;
+    agentError = false;
+    _wiredAgentResult;
+
+    // ─── Work assignment state ──────────────────────────────────────────
+    @track currentWork = null;
+    recordUrl = null;
+    isRouting = false;
+    isDeferring = false;
+
+    // ─── Queue depth ────────────────────────────────────────────────────
+    queueCount = null;
+
+    // ─── SLA countdown ──────────────────────────────────────────────────
+    _slaTimerId = null;
+    @track slaDisplay = '';
+    @track slaPercent = 100;
+    @track slaExpired = false;
+    _slaDeadlineMs = null;
+    _slaStartMs = null;
+
+    // =========================================================================
+    // WIRED DATA
+    // =========================================================================
+
+    @wire(getAgentContext)
+    wiredAgent(result) {
+        this._wiredAgentResult = result;
+        const { data, error } = result;
+        if (data) {
+            this.agentContext = data;
+            this.agentError = false;
+            this._refreshQueueDepth();
+        } else if (error) {
+            this.agentContext = null;
+            this.agentError = true;
+        }
+    }
+
+    // =========================================================================
+    // LIFECYCLE
+    // =========================================================================
+
+    disconnectedCallback() {
+        this._clearSlaTimer();
+    }
+
+    // =========================================================================
+    // COMPUTED PROPERTIES
+    // =========================================================================
+
+    get hasAgent() {
+        return this.agentContext != null;
+    }
+
+    get hasWork() {
+        return this.currentWork != null;
+    }
+
+    get displayName() {
+        if (!this.currentWork) return '';
+        return this.currentWork.recordName || this.currentWork.recordId || '';
+    }
+
+    get agentStatus() {
+        return this.agentContext?.status || 'Offline';
+    }
+
+    get isAvailable() {
+        const status = this.agentStatus;
+        return status === 'Online' || status === 'Busy';
+    }
+
+    get nextButtonLabel() {
+        return this.isRouting ? this.label.routing : this.label.nextBestAction;
+    }
+
+    get isNextDisabled() {
+        return this.isRouting || !this.isAvailable;
+    }
+
+    get deferButtonLabel() {
+        return this.isDeferring ? this.label.deferring : this.label.defer;
+    }
+
+    get isDeferDisabled() {
+        return this.isDeferring || !this.hasWork;
+    }
+
+    get loadDisplay() {
+        if (!this.agentContext) return '0 / 0';
+        return `${this.agentContext.currentLoad || 0} / ${this.agentContext.maxCapacity || 0}`;
+    }
+
+    get queueDisplay() {
+        return this.queueCount != null ? this.queueCount : '--';
+    }
+
+    get hasSla() {
+        return this._slaDeadlineMs != null;
+    }
+
+    get slaColorClass() {
+        if (this.slaExpired) return 'sla-red';
+        if (this.slaPercent <= 20) return 'sla-red';
+        if (this.slaPercent <= 50) return 'sla-amber';
+        return 'sla-green';
+    }
+
+    get slaText() {
+        if (this.slaExpired) return this.label.slaExpired;
+        return this.slaDisplay;
+    }
+
+    // ── Status button variants ──────────────────────────────────────────
+
+    get statusOptions() {
+        return [
+            { label: this.label.online, value: 'Online' },
+            { label: this.label.busy, value: 'Busy' },
+            { label: this.label.away, value: 'Away' },
+            { label: this.label.offline, value: 'Offline' }
+        ];
+    }
+
+    get statusBadgeClass() {
+        const status = this.agentStatus.toLowerCase();
+        return `status-badge status-${status}`;
+    }
+
+    // =========================================================================
+    // EVENT HANDLERS
+    // =========================================================================
+
+    /**
+     * @description Handles availability status change from the combobox.
+     */
+    async handleStatusChange(event) {
+        const newStatus = event.detail.value;
+        if (newStatus === this.agentStatus) return;
+
+        try {
+            await updateAgentStatus({
+                agentId: this.agentContext.agentId,
+                status: newStatus
+            });
+            await refreshApex(this._wiredAgentResult);
+        } catch (error) {
+            this.dispatchEvent(new ShowToastEvent({
+                title: this.label.routingError,
+                message: error.body?.message || this.label.unexpectedError,
+                variant: 'error'
+            }));
+        }
+    }
+
+    /**
+     * @description "Next Best Action" -- pull next work item.
+     */
+    async handleGetNextWork() {
+        this.isRouting = true;
+        this.recordUrl = null;
+
+        try {
+            const result = await getNextWork({
+                configDevName: this.configDevName
+            });
+
+            if (result.success) {
+                this.currentWork = result;
+                this._generateRecordUrl(result.recordId);
+                this._startSlaCountdown(result.slaDeadline);
+
+                this.dispatchEvent(new ShowToastEvent({
+                    title: this.label.recordAssigned,
+                    message: result.recordName || result.recordId,
+                    variant: 'success'
+                }));
+
+                // Refresh agent context (load changed) and queue depth
+                await refreshApex(this._wiredAgentResult);
+                this._refreshQueueDepth();
+            } else {
+                this.currentWork = null;
+                this._clearSlaTimer();
+                this.dispatchEvent(new ShowToastEvent({
+                    title: this.label.routingError,
+                    message: result.errorMessage || this.label.noRecords,
+                    variant: 'warning'
+                }));
+            }
+        } catch (error) {
+            this.currentWork = null;
+            this._clearSlaTimer();
+            this.dispatchEvent(new ShowToastEvent({
+                title: this.label.routingError,
+                message: error.body?.message || this.label.unexpectedError,
+                variant: 'error'
+            }));
+        } finally {
+            this.isRouting = false;
+        }
+    }
+
+    /**
+     * @description Defer the currently assigned work item.
+     */
+    async handleDefer() {
+        if (!this.currentWork) return;
+
+        this.isDeferring = true;
+
+        try {
+            await deferWork({
+                recordId: this.currentWork.recordId,
+                configDevName: this.currentWork.configDevName || this.configDevName
+            });
+
+            this.currentWork = null;
+            this.recordUrl = null;
+            this._clearSlaTimer();
+
+            this.dispatchEvent(new ShowToastEvent({
+                title: this.label.deferSuccess,
+                message: '',
+                variant: 'success'
+            }));
+
+            // Refresh agent context (load changed) and queue depth
+            await refreshApex(this._wiredAgentResult);
+            this._refreshQueueDepth();
+        } catch (error) {
+            this.dispatchEvent(new ShowToastEvent({
+                title: this.label.deferError,
+                message: error.body?.message || this.label.unexpectedError,
+                variant: 'error'
+            }));
+        } finally {
+            this.isDeferring = false;
+        }
+    }
+
+    /**
+     * @description Navigate to the assigned record.
+     */
+    handleNavigate(event) {
+        event.preventDefault();
+        if (this.currentWork?.recordId) {
+            this[NavigationMixin.Navigate]({
+                type: 'standard__recordPage',
+                attributes: {
+                    recordId: this.currentWork.recordId,
+                    actionName: 'view'
+                }
+            });
+        }
+    }
+
+    // =========================================================================
+    // PRIVATE HELPERS
+    // =========================================================================
+
+    /**
+     * @description Generates a Lightning URL for the record link.
+     */
+    _generateRecordUrl(recordId) {
+        if (!recordId) return;
+        this[NavigationMixin.GenerateUrl]({
+            type: 'standard__recordPage',
+            attributes: {
+                recordId: recordId,
+                actionName: 'view'
+            }
+        }).then((url) => {
+            this.recordUrl = url;
+        });
+    }
+
+    /**
+     * @description Starts the SLA countdown timer. Runs every second,
+     *              zero server calls per tick. Stores the deadline and
+     *              start timestamps for percentage calculation.
+     */
+    _startSlaCountdown(slaDeadline) {
+        this._clearSlaTimer();
+
+        if (!slaDeadline) {
+            this._slaDeadlineMs = null;
+            this.slaDisplay = '';
+            this.slaPercent = 100;
+            this.slaExpired = false;
+            return;
+        }
+
+        this._slaDeadlineMs = new Date(slaDeadline).getTime();
+        this._slaStartMs = Date.now();
+
+        this._tickSla();
+        this._slaTimerId = setInterval(() => this._tickSla(), 1000);
+    }
+
+    /**
+     * @description Single tick of the SLA countdown. Calculates remaining
+     *              time, formats display string, computes percentage for
+     *              colour thresholds.
+     */
+    _tickSla() {
+        const now = Date.now();
+        const remaining = this._slaDeadlineMs - now;
+        const total = this._slaDeadlineMs - this._slaStartMs;
+
+        if (remaining <= 0) {
+            this.slaDisplay = '00:00:00';
+            this.slaPercent = 0;
+            this.slaExpired = true;
+            this._clearSlaTimer();
+            return;
+        }
+
+        this.slaExpired = false;
+        this.slaPercent = total > 0 ? Math.round((remaining / total) * 100) : 100;
+
+        const hours = Math.floor(remaining / 3600000);
+        const minutes = Math.floor((remaining % 3600000) / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+
+        this.slaDisplay =
+            String(hours).padStart(2, '0') + ':' +
+            String(minutes).padStart(2, '0') + ':' +
+            String(seconds).padStart(2, '0');
+    }
+
+    /**
+     * @description Clears the SLA interval timer.
+     */
+    _clearSlaTimer() {
+        if (this._slaTimerId) {
+            clearInterval(this._slaTimerId);
+            this._slaTimerId = null;
+        }
+    }
+
+    /**
+     * @description Refreshes queue depth count. Silently ignores errors
+     *              (queue depth is informational, not blocking).
+     */
+    _refreshQueueDepth() {
+        const devName = this.configDevName;
+        if (!devName) {
+            this.queueCount = null;
+            return;
+        }
+        getQueueDepth({ configDevName: devName })
+            .then((count) => {
+                this.queueCount = count;
+            })
+            .catch(() => {
+                this.queueCount = null;
+            });
+    }
+}
