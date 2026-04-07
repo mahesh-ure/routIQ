@@ -19,6 +19,7 @@
     <tabs>Log__c</tabs>
     <tabs>Routing_Log__c</tabs>
     <tabs>Log_Entry__c</tabs>
+    <tabs>Routing_Analytics</tabs>
     <uiType>Lightning</uiType>
     <utilityBar>Universal_Routing_Engine_UtilityBar2</utilityBar>
     <workspaceConfig>
@@ -42,6 +43,9 @@
         </mappings>
         <mappings>
             <tab>Skill_Bundle__c</tab>
+        </mappings>
+        <mappings>
+            <tab>Routing_Analytics</tab>
         </mappings>
     </workspaceConfig>
 </CustomApplication>

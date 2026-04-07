@@ -1,0 +1,30 @@
+/* ── Analytics Dashboard Styles ─────────────────────────────────── */
+
+.metric-box {
+    background-color: var(--lwc-colorBackgroundAlt, #f3f3f3);
+    border-radius: 0.25rem;
+    padding: 1rem;
+}
+
+.metric-value {
+    color: var(--lwc-colorTextDefault, #080707);
+    font-weight: 700;
+}
+
+/* Tab toggle active/inactive states */
+.tab-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--lwc-colorBorder, #c9c9c9);
+    background-color: var(--lwc-colorBackgroundAlt, #ffffff);
+    cursor: pointer;
+    font-size: 0.8125rem;
+}
+
+.tab-btn-active {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--lwc-brandPrimary, #0176d3);
+    background-color: var(--lwc-brandPrimary, #0176d3);
+    color: var(--lwc-colorTextInverse, #ffffff);
+    cursor: pointer;
+    font-size: 0.8125rem;
+}

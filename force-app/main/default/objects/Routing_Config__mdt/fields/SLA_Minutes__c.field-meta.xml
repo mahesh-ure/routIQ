@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SLA_Minutes__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Maximum minutes allowed from routing request receipt to successful assignment. Used by AuditLogger to compute SLA_Met__c on Routing_Log__c. When null or zero, SLA tracking is disabled for this config — SLA_Met__c will be null on the log record. Subscriber-controlled so each customer can define SLA targets per routing scenario.</description>
+    <label>SLA Minutes</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

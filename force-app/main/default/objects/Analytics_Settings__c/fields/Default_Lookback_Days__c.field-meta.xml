@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Default_Lookback_Days__c</fullName>
+    <defaultValue>30</defaultValue>
+    <description>Number of days the Analytics Dashboard looks back when querying Routing_Log__c. Controls the LAST_N_DAYS filter on all three lenses (velocity, SLA compliance, agent utilisation). Higher values increase query scope and response time. Recommended range: 7–90. Default: 30.</description>
+    <externalId>false</externalId>
+    <inlineHelpText>How many days of routing history to show on the Analytics Dashboard. Default: 30.</inlineHelpText>
+    <label>Default Lookback Days</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customSettingsType>Hierarchy</customSettingsType>
+    <description>Configuration for the routIQ Analytics Dashboard (P2 Feature 1). Hierarchy type supports org-wide defaults with optional user/profile overrides. All values read via getInstance() — zero SOQL at runtime. Subscribers can tune lookback windows and query limits without code changes.</description>
+    <enableFeeds>false</enableFeeds>
+    <label>Analytics Settings</label>
+    <visibility>Public</visibility>
+</CustomObject>

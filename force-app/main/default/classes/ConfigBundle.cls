@@ -38,6 +38,7 @@ public with sharing class ConfigBundle implements Comparable {
     public List<String> selectFields;
     public Integer maxRetryAttempts;
     public Boolean includeBusyAgents;
+    public Decimal slaMinutes;
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ public with sharing class ConfigBundle implements Comparable {
             ? config.Max_Retry_Attempts__c.intValue()
             : 1;
         this.includeBusyAgents = (config.Include_Busy_Agents__c == true);
+        this.slaMinutes = config.SLA_Minutes__c;
     }
 
     /**

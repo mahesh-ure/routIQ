@@ -81,6 +81,64 @@ public with sharing class AuditLogger {
     }
 
     /**
+     * @description Enriches buffered audit entries with analytics fields BEFORE flush.
+     *              Called once per routing transaction in RoutingEngine Phase 5.
+     *
+     *              Duration: elapsed ms from request receipt to Routed_At__c timestamp.
+     *              SLA: compared against the per-config SLA_Minutes__c target.
+     *              Agent Name: denormalized from the Agent__c.User__r.Name for
+     *              analytics GROUP BY performance (avoids User lookup join).
+     *
+     *              Only successful assignments (Status__c = 'Success') receive
+     *              duration and SLA data. Agent name is set on all entries where
+     *              Assigned_To__c is populated.
+     *
+     *              Zero SOQL — all data passed in from RoutingEngine cached state.
+     *
+     * @param entries          AuditEntry list from processBundle() calls
+     * @param bundles          ConfigBundle list (same order as entries) — provides slaMinutes
+     * @param requestStartMs   System.currentTimeMillis() captured at RoutingEngine.execute() entry
+     * @param agentName        Display name of the assigned agent (from Agent__c.User__r.Name)
+     */
+    public static void enrichWithAnalytics(
+        List<AuditEntry> entries,
+        List<ConfigBundle> bundles,
+        Long requestStartMs,
+        String agentName
+    ) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+
+        Long nowMs = System.currentTimeMillis();
+
+        for (Integer i = 0; i < entries.size(); i++) {
+            Routing_Log__c log = entries[i].record;
+
+            // Agent name — set on all entries with an assigned agent
+            if (log.Assigned_To__c != null && String.isNotBlank(agentName)) {
+                log.Agent_Name__c = agentName;
+            }
+
+            // Duration + SLA — only for successful assignments
+            if (log.Status__c == 'Success' && requestStartMs != null) {
+                Long durationMs = nowMs - requestStartMs;
+                log.Assignment_Duration_Ms__c = durationMs;
+
+                // SLA evaluation — only when config defines SLA_Minutes__c
+                Decimal slaMinutes = (i < bundles.size())
+                    ? bundles[i].slaMinutes
+                    : null;
+                if (slaMinutes != null && slaMinutes > 0) {
+                    Long slaMs = (Long)(slaMinutes * 60000);
+                    log.SLA_Met__c = (durationMs <= slaMs) ? 'Met' : 'Breached';
+                }
+                // When slaMinutes is null/0, SLA_Met__c stays null (not tracked)
+            }
+        }
+    }
+
+    /**
      * @description Bulk-inserts all buffered audit entries in a single DML operation.
      *              Returns the list of inserted Routing_Log__c Ids (null for failures).
      *

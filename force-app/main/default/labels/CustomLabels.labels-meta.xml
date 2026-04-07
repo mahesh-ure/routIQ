@@ -557,4 +557,151 @@
         <value>Finding next work item</value>
     </labels>
 
+    <!-- ── Analytics Dashboard ──────────────────────────────────────── -->
+
+    <labels>
+        <fullName>URE_AnalyticsDashboardTitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Analytics dashboard page title</shortDescription>
+        <value>Routing Analytics</value>
+    </labels>
+    <labels>
+        <fullName>URE_VelocityTitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Velocity lens card title</shortDescription>
+        <value>Routing Velocity</value>
+    </labels>
+    <labels>
+        <fullName>URE_VelocitySubtitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Velocity lens card subtitle</shortDescription>
+        <value>Average time from request to assignment (last 30 days)</value>
+    </labels>
+    <labels>
+        <fullName>URE_SlaComplianceTitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA compliance lens card title</shortDescription>
+        <value>SLA Compliance</value>
+    </labels>
+    <labels>
+        <fullName>URE_SlaComplianceSubtitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA compliance lens card subtitle</shortDescription>
+        <value>Percentage assigned before SLA deadline (last 30 days)</value>
+    </labels>
+    <labels>
+        <fullName>URE_AgentUtilisationTitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent utilisation lens card title</shortDescription>
+        <value>Agent Utilisation</value>
+    </labels>
+    <labels>
+        <fullName>URE_AgentUtilisationSubtitle</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent utilisation lens card subtitle</shortDescription>
+        <value>Assignments per agent per day (last 30 days)</value>
+    </labels>
+    <labels>
+        <fullName>URE_AnalyticsNoData</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state when no routing data exists</shortDescription>
+        <value>No routing data available for the selected period. Route some records to see analytics.</value>
+    </labels>
+    <labels>
+        <fullName>URE_AnalyticsError</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error state when analytics query fails</shortDescription>
+        <value>Unable to load analytics data. Please try again or contact your administrator.</value>
+    </labels>
+    <labels>
+        <fullName>URE_ByConfig</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Tab label for SLA by config view</shortDescription>
+        <value>By Config</value>
+    </labels>
+    <labels>
+        <fullName>URE_ByAgent</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Tab label for SLA by agent view</shortDescription>
+        <value>By Agent</value>
+    </labels>
+    <labels>
+        <fullName>URE_Met</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA Met status label</shortDescription>
+        <value>Met</value>
+    </labels>
+    <labels>
+        <fullName>URE_Breached</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA Breached status label</shortDescription>
+        <value>Breached</value>
+    </labels>
+    <labels>
+        <fullName>URE_ComplianceRate</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Compliance rate column header</shortDescription>
+        <value>Compliance Rate</value>
+    </labels>
+    <labels>
+        <fullName>URE_AvgDuration</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Average duration metric label</shortDescription>
+        <value>Avg Duration</value>
+    </labels>
+    <labels>
+        <fullName>URE_Assignments</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Assignments count metric label</shortDescription>
+        <value>Assignments</value>
+    </labels>
+    <labels>
+        <fullName>URE_AnalyticsRefresh</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Refresh button label</shortDescription>
+        <value>Refresh</value>
+    </labels>
+    <labels>
+        <fullName>URE_Milliseconds</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Milliseconds unit abbreviation</shortDescription>
+        <value>ms</value>
+    </labels>
+
 </CustomLabels>

@@ -55,6 +55,42 @@ Routing_Rule__mdt
 Feature_Flag__mdt
 Query_Template__mdt
 
+### 1a. No Hardcoded Values in Apex — Custom Settings Required
+
+**All tunable runtime values in Apex MUST be stored in Custom Settings (Hierarchy type), NOT as constants or magic numbers.**
+
+This applies to:
+
+- Numeric thresholds (days, limits, counts, timeouts)
+- Feature toggles (booleans)
+- Default string values (status names, field API names)
+- Query parameters (LIMIT values, lookback windows)
+
+Rules:
+
+1. Create a Hierarchy Custom Setting per feature area (e.g. `Analytics_Settings__c`)
+2. Read via `getInstance()` — zero SOQL, platform-cached, hierarchy-aware
+3. Always provide a compile-time FALLBACK constant for when the setting record does not exist (fresh install safety net)
+4. FALLBACK constants must be clearly named (e.g. `FALLBACK_DAYS`, not `DEFAULT_DAYS`)
+5. The Custom Setting is the source of truth — the fallback is a safety net, not a default
+6. Add inline help text and description on every Custom Setting field
+7. Include the Custom Setting fields in the appropriate Permission Set
+
+Benefits:
+
+- Subscriber admins can tune values without code changes
+- Per-user or per-profile overrides via Hierarchy resolution
+- Package upgrades do not reset subscriber values
+- Zero governor cost at runtime
+
+Current Custom Settings in this package:
+
+| Custom Setting | Feature | Fields |
+|---|---|---|
+| `Analytics_Settings__c` | P2 Analytics Dashboard | `Default_Lookback_Days__c`, `Max_Query_Rows__c` |
+
+When adding hardcoded values to any new feature, check this table first. If a suitable Custom Setting exists, add a field to it. If not, create a new one.
+
 ---
 
 ### 2. Layered Architecture
