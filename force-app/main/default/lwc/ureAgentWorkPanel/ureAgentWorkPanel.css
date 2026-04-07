@@ -1,0 +1,119 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ureAgentWorkPanel — Layer 5 Agent Work Panel Styles
+ *
+ * Design:
+ * - SLDS-native where possible, custom only for SLA colours + metrics
+ * - No !important overrides
+ * - All custom classes scoped to this component (LWC shadow DOM)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+:host {
+    display: block;
+}
+
+/* ── Status Badge ────────────────────────────────────────────────────────── */
+
+.status-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025rem;
+}
+
+.status-online {
+    background-color: #04844b;
+    color: #ffffff;
+}
+
+.status-busy {
+    background-color: #fe9339;
+    color: #080707;
+}
+
+.status-away {
+    background-color: #706e6b;
+    color: #ffffff;
+}
+
+.status-offline {
+    background-color: #c9c7c5;
+    color: #3e3e3c;
+}
+
+/* ── Metric Cards ────────────────────────────────────────────────────────── */
+
+.metric-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: var(--slds-g-color-neutral-base-95, #f3f3f3);
+    border-radius: 0.25rem;
+}
+
+.metric-label {
+    font-size: 0.6875rem;
+    color: var(--slds-g-color-neutral-base-30, #706e6b);
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+}
+
+.metric-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--slds-g-color-neutral-base-10, #181818);
+}
+
+/* ── Work Card ───────────────────────────────────────────────────────────── */
+
+.work-card {
+    border-left: 4px solid #0176d3;
+}
+
+/* ── SLA Countdown Colours ───────────────────────────────────────────────── */
+
+.sla-section {
+    padding: 0.25rem 0;
+}
+
+.sla-timer {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05rem;
+}
+
+.sla-green .sla-timer {
+    color: #04844b;
+}
+
+.sla-amber .sla-timer {
+    color: #fe9339;
+}
+
+.sla-red .sla-timer {
+    color: #ea001e;
+}
+
+/* ── Empty State ─────────────────────────────────────────────────────────── */
+
+.empty-state {
+    padding: 1rem 0;
+}
+
+.empty-icon {
+    --slds-c-icon-color-foreground-default: var(--slds-g-color-neutral-base-50, #aeaeae);
+}
+
+/* ── Full Width Button ───────────────────────────────────────────────────── */
+
+.full-width {
+    width: 100%;
+}
+
+.full-width lightning-button {
+    width: 100%;
+}
