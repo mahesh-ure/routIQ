@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Assigned_At__c</fullName>
+    <description>DateTime when the record was assigned to the agent. Set once during creation by WorkItemService. Used by EscalationSelector to calculate elapsed time against SLA deadline.</description>
+    <externalId>false</externalId>
+    <label>Assigned At</label>
+    <required>true</required>
+    <trackTrending>false</trackTrending>
+    <type>DateTime</type>
+</CustomField>

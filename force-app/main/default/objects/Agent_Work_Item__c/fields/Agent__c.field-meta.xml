@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agent__c</fullName>
+    <description>Master-detail to Agent__c. Sharing inherits from parent. Cascade-deletes work items when agent is removed. Roll-up summaries available for load calculations.</description>
+    <externalId>false</externalId>
+    <label>Agent</label>
+    <referenceTo>Agent__c</referenceTo>
+    <relationshipLabel>Work Items</relationshipLabel>
+    <relationshipName>Work_Items</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackTrending>false</trackTrending>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

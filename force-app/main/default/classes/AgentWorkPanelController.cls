@@ -246,8 +246,8 @@ public with sharing class AgentWorkPanelController {
             throw new AuraHandledException('Defer failed: ' + errors);
         }
 
-        // ── Decrement agent's current load ─────────────────────────────
-        decrementAgentLoad();
+        // ── Remove work item and sync agent load ───────────────────────
+        WorkItemService.deferWorkItem(String.valueOf(recordId));
 
         // ── Publish DEFERRED Platform Event ────────────────────────────
         publishDeferredEvent(recordId, objectApiName, configDevName);
@@ -397,33 +397,9 @@ public with sharing class AgentWorkPanelController {
         return (val instanceof Datetime) ? (Datetime) val : null;
     }
 
-    /**
-     * @description Decrements Current_Load__c on the running user's Agent__c record.
-     *              Silently skips if no agent record exists or load is already 0.
-     */
-    private static void decrementAgentLoad() {
-        Id userId = UserInfo.getUserId();
-
-        List<Agent__c> agents = [
-            SELECT Id, Current_Load__c
-            FROM   Agent__c
-            WHERE  User__c = :userId
-            AND    Is_Active__c = true           
-            WITH SECURITY_ENFORCED
-            LIMIT  1
-        ];
-
-        if (agents.isEmpty()) {
-            return;
-        }
-
-        Agent__c agent = agents[0];
-        Decimal load = agent.Current_Load__c != null ? agent.Current_Load__c : 0;
-        if (load > 0) {
-            agent.Current_Load__c = load - 1;
-            Database.update(agent, false, AccessLevel.USER_MODE);
-        }
-    }
+    // decrementAgentLoad() removed — replaced by WorkItemService.deferWorkItem()
+    // which deletes the Agent_Work_Item__c and syncs Current_Load__c from COUNT
+    // of active items (single source of truth, no drift).
 
     /**
      * @description Publishes a DEFERRED Platform Event for real-time subscribers.

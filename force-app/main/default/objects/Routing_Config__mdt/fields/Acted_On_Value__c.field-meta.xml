@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Acted_On_Value__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Expected value of Acted_On_Field__c that indicates the agent has acted on the record. When the field matches this value, escalation is suppressed. Supports comma-separated values for multiple acted-on states. Example: Working,In Progress.</description>
+    <label>Acted On Value</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

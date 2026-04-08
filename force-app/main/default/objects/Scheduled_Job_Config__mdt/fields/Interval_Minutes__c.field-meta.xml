@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Interval_Minutes__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Run interval in minutes. The controller builds a cron expression from this value. Default 15 for SLA Escalation. Subscriber-controlled so each customer can tune frequency without code changes.</description>
+    <label>Interval Minutes</label>
+    <precision>18</precision>
+    <required>true</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

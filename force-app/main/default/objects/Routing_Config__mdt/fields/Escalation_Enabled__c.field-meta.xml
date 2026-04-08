@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Escalation_Enabled__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>false</defaultValue>
+    <description>Master toggle for SLA escalation on this routing config. When false, the SLA Escalation Job skips records routed by this config. Subscriber-controlled so each customer can enable escalation per routing scenario.</description>
+    <label>Escalation Enabled</label>
+    <type>Checkbox</type>
+</CustomField>

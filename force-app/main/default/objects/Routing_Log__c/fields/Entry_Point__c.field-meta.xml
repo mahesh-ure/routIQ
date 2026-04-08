@@ -31,6 +31,11 @@
                 <default>false</default>
                 <label>Global Action</label>
             </value>
+            <value>
+                <fullName>ScheduledJob</fullName>
+                <default>false</default>
+                <label>Scheduled Job</label>
+            </value>
         </valueSetDefinition>
     </valueSet>
 </CustomField>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Enabled__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>true</defaultValue>
+    <description>Master toggle for this job. When false, ScheduledJobController will not allow scheduling. Subscriber-controlled so admins can disable jobs without unscheduling via Setup.</description>
+    <label>Enabled</label>
+    <type>Checkbox</type>
+</CustomField>
