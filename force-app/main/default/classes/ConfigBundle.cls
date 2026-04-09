@@ -32,13 +32,26 @@ public with sharing class ConfigBundle implements Comparable {
     public String ownerFieldApiName;
     public Integer candidateLimit;
     public Boolean allowMultiple;
+    public Integer maxCapacity;
     public String preAssignmentOwnerType;
+    public String closedStatusFieldApiName;
     public List<String> closedStatusValues;
     public List<String> recordTypeDevNames;
     public List<String> selectFields;
     public Integer maxRetryAttempts;
     public Boolean includeBusyAgents;
     public Decimal slaMinutes;
+
+    // ─── P2 Escalation fields ───────────────────────────────────────────────
+    public Boolean escalationEnabled;
+    public Decimal escalationThresholdPct;
+    public String  escalationAction;
+    public String  actedOnField;
+    public String  actedOnValue;
+    public List<String> actedOnValues;
+    public String  escalationNotifyEmail;
+    public String  escalationReturnOwner;
+    public String  slaDeadlineField;
 
     // ─── Constructor ─────────────────────────────────────────────────────────
 
@@ -72,7 +85,12 @@ public with sharing class ConfigBundle implements Comparable {
             ? config.Candidate_Limit__c.intValue()
             : 50;
         this.allowMultiple = (config.Allow_Multiple__c == true);
+        this.maxCapacity = (config.Max_Capacity__c != null
+                && config.Max_Capacity__c > 0)
+            ? config.Max_Capacity__c.intValue()
+            : 1;
         this.preAssignmentOwnerType = config.Pre_Assignment_Owner_Type__c;
+        this.closedStatusFieldApiName = config.Closed_Status_Field_API_Name__c;
         this.closedStatusValues = parseCommaDelimited(config.Closed_Status_Values__c);
         this.recordTypeDevNames = parseCommaDelimited(config.Record_Type_Dev_Name__c);
         this.selectFields = parseCommaDelimited(config.Select_Fields__c);
@@ -81,6 +99,17 @@ public with sharing class ConfigBundle implements Comparable {
             : 1;
         this.includeBusyAgents = (config.Include_Busy_Agents__c == true);
         this.slaMinutes = config.SLA_Minutes__c;
+
+        // P2 Escalation fields
+        this.escalationEnabled = (config.Escalation_Enabled__c == true);
+        this.escalationThresholdPct = config.Escalation_Threshold_Pct__c;
+        this.escalationAction = config.Escalation_Action__c;
+        this.actedOnField = config.Acted_On_Field__c;
+        this.actedOnValue = config.Acted_On_Value__c;
+        this.actedOnValues = parseCommaDelimited(config.Acted_On_Value__c);
+        this.escalationNotifyEmail = config.Escalation_Notify_Email__c;
+        this.escalationReturnOwner = config.Escalation_Return_Owner__c;
+        this.slaDeadlineField = config.SLA_Deadline_Field__c;
     }
 
     /**

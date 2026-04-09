@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Job_Class_Name__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>Fully qualified Apex class name implementing Schedulable. Used by ScheduledJobController to instantiate the job via Type.forName(). Example: SLAEscalationJob.</description>
+    <label>Job Class Name</label>
+    <length>255</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

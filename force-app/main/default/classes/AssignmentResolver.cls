@@ -304,6 +304,15 @@ public with sharing class AssignmentResolver {
                 .withLimits()
                 .log();
 
+            // ── Create work item + sync agent load (BUG FIX) ──────────
+            // Previously incrementAgentLoad() existed but was never called.
+            // Now replaced by WorkItemService which creates a trackable
+            // Agent_Work_Item__c record AND syncs Current_Load__c from
+            // COUNT of active items — single source of truth, no drift.
+            createWorkItemForAssignment(
+                agentUserId, lockedRecord.Id, bundle
+            );
+
             return outcomeAssigned(
                 lockedRecord.Id,
                 lockOutcome.retryCount,
@@ -332,34 +341,52 @@ public with sharing class AssignmentResolver {
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
     /**
-     * @description Increments Agent__c.Current_Load__c by 1 and sets Last_Assigned__c.
-     *              Non-fatal — if the update fails (FLS, agent not found), routing still
+     * @description Creates an Agent_Work_Item__c for the assigned record and
+     *              syncs Agent__c.Current_Load__c from COUNT of active items.
+     *              Non-fatal — if the work item creation fails, routing still
      *              succeeds but a warning is logged.
      *
-     * @param agentUserId The agent's User Id (used to look up Agent__c)
+     *              Replaces the previous incrementAgentLoad() which was never
+     *              called (dead code bug). WorkItemService.createWorkItem()
+     *              handles both the work item insert AND the load sync.
+     *
+     * @param agentUserId   The agent's User Id (used to look up Agent__c)
+     * @param recordId      The assigned record's Id
+     * @param bundle        The ConfigBundle for object/config context
      */
-    private static void incrementAgentLoad(Id agentUserId) {
+    private static void createWorkItemForAssignment(
+        Id agentUserId,
+        Id recordId,
+        ConfigBundle bundle
+    ) {
         try {
             Map<Id, Agent__c> agentsByUser =
                 AgentCapabilitySelector.getActiveAgentsByUserId();
             Agent__c agent = agentsByUser.get(agentUserId);
 
             if (agent == null) {
+                Logger.warn('No Agent__c found for user — work item skipped'
+                        + ' | user=' + agentUserId)
+                    .category(Logger.Category.ASSIGNMENT)
+                    .inClass(CLS).inMethod('createWorkItemForAssignment')
+                    .log();
                 return;
             }
 
-            Decimal currentLoad = (agent.Current_Load__c != null) ? agent.Current_Load__c : 0;
-            agent.Current_Load__c = currentLoad + 1;
-            agent.Last_Assigned__c = System.now();
-
-            Database.update(agent, false, AccessLevel.USER_MODE);
+            WorkItemService.createWorkItem(
+                agent.Id,
+                recordId,
+                bundle.objectApiName,
+                bundle.developerName
+            );
 
         } catch (Exception ex) {
-            // Non-fatal — routing succeeded, but load tracking failed
-            Logger.warn('Failed to increment agent load | user=' + agentUserId
+            // Non-fatal — routing succeeded, but work item tracking failed
+            Logger.warn('Failed to create work item | user=' + agentUserId
+                    + ' | record=' + recordId
                     + ' | reason=' + ex.getMessage())
                 .category(Logger.Category.ASSIGNMENT)
-                .inClass(CLS).inMethod('incrementAgentLoad')
+                .inClass(CLS).inMethod('createWorkItemForAssignment')
                 .log();
         }
     }

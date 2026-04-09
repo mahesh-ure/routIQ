@@ -15,6 +15,10 @@
         <value xsi:type="xsd:double">50.0</value>
     </values>
     <values>
+        <field>Closed_Status_Field_API_Name__c</field>
+        <value xsi:type="xsd:string">Status</value>
+    </values>
+    <values>
         <field>Closed_Status_Values__c</field>
         <value xsi:type="xsd:string">Closed,Resolved,Cancelled</value>
     </values>

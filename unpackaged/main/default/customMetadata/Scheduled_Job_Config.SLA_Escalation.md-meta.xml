@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>SLA Escalation</label>
+    <protected>false</protected>
+    <values>
+        <field>Job_Class_Name__c</field>
+        <value xsi:type="xsd:string">SLAEscalationJob</value>
+    </values>
+    <values>
+        <field>Interval_Minutes__c</field>
+        <value xsi:type="xsd:double">15.0</value>
+    </values>
+    <values>
+        <field>Is_Enabled__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">Checks active work items for SLA threshold breaches every 15 minutes. Escalates records where the agent has not acted before the configured SLA deadline percentage. Actions: Re-route (return to queue), Notify (email supervisor), or Both.</value>
+    </values>
+</CustomMetadata>

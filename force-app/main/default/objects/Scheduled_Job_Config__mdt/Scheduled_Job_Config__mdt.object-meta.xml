@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Generic scheduled job configuration. One record per job type (SLA Escalation, Report Generator, Data Cleanup, etc.). Stores interval, enabled flag, and class name. Queried by ScheduledJobController to start/stop jobs from LWC without anonymous Apex.</description>
+    <label>Scheduled Job Config</label>
+    <pluralLabel>Scheduled Job Configs</pluralLabel>
+    <visibility>Public</visibility>
+</CustomObject>

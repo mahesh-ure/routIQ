@@ -74,35 +74,78 @@ public with sharing class AssignmentSelector {
     }
 
     /**
-     * @description Queries records currently owned by the agent for a given object type.
-     *              Used by RoutingEngine to enforce Allow_Multiple__c = false — if the agent
-     *              already owns a record, the engine skips assignment for that config.
+     * @description Queries the OPEN records currently owned by an agent for
+     *              a given routing config. Used by RoutingEngine's Phase 3
+     *              capacity gate.
      *
-     *              Intentionally returns only Id (minimal field access) with LIMIT 1
-     *              since the caller only needs to know whether any assignments exist.
+     *              Two metadata-driven dimensions:
+     *              1. Closed-status filter — when
+     *                 Routing_Config__mdt.Closed_Status_Field_API_Name__c and
+     *                 Closed_Status_Values__c are both supplied, the query
+     *                 adds "<statusField> NOT IN :closedValues" so already-
+     *                 completed records never block new assignments (fixes
+     *                 the latent Allow_Multiple bug where the owner field
+     *                 does not change when a record is closed).
+     *              2. Per-config capacity — LIMIT is driven by
+     *                 Routing_Config__mdt.Max_Capacity__c. Caller compares
+     *                 results.size() to maxCapacity to decide "at cap".
+     *                 Caller should pass 1 when maxCapacity is null/zero.
      *
-     * @param objectApiName    SObject API name
-     * @param ownerFieldApiName Field that holds the owner (e.g. OwnerId, Assigned_To__c)
-     * @param agentUserId      The agent's User Id
-     * @return List with 0 or 1 records. Non-empty means the agent has an existing assignment.
+     *              Minimal field access (Id only) — the caller only needs
+     *              to count rows.
+     *
+     * @param objectApiName             SObject API name
+     * @param ownerFieldApiName         Owner field (OwnerId, Assigned_To__c, …)
+     * @param agentUserId               The agent's User Id
+     * @param closedStatusFieldApiName  Optional — status field API name
+     *                                  (Status, StageName, State__c). Blank
+     *                                  disables closed-status filtering.
+     * @param closedStatusValues        Optional — values considered closed.
+     *                                  Empty/null disables filtering.
+     * @param maxCapacity               Per-config capacity ceiling. Drives
+     *                                  LIMIT. Must be >= 1 (caller defaults
+     *                                  null/0 to 1).
+     * @return Up to maxCapacity rows. Caller treats size >= maxCapacity as
+     *         "agent at cap for this config".
      */
     public static List<SObject> queryOwnedRecords(
         String objectApiName,
         String ownerFieldApiName,
-        Id agentUserId
+        Id agentUserId,
+        String closedStatusFieldApiName,
+        List<String> closedStatusValues,
+        Integer maxCapacity
     ) {
         if (Test.isRunningTest() && mockOwnedRecords != null) {
             return mockOwnedRecords;
         }
 
+        // Defensive floor — never issue an invalid LIMIT
+        Integer effectiveLimit = (maxCapacity != null && maxCapacity > 0)
+            ? maxCapacity
+            : 1;
+
+        Boolean filterClosed =
+               String.isNotBlank(closedStatusFieldApiName)
+            && closedStatusValues != null
+            && !closedStatusValues.isEmpty();
+
         String soql = 'SELECT Id'
             + ' FROM ' + objectApiName
-            + ' WHERE ' + ownerFieldApiName + ' = :agentId'
-            + ' LIMIT 1';
+            + ' WHERE ' + ownerFieldApiName + ' = :agentId';
 
         Map<String, Object> binds = new Map<String, Object>{
             'agentId' => agentUserId
         };
+
+        if (filterClosed) {
+            soql += ' AND ' + closedStatusFieldApiName
+                 + ' NOT IN :closedValues';
+            binds.put('closedValues', closedStatusValues);
+        }
+
+        soql += ' LIMIT :limitValue';
+        binds.put('limitValue', effectiveLimit);
 
         return Database.queryWithBinds(
             soql, binds, AccessLevel.USER_MODE
