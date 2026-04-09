@@ -422,18 +422,34 @@ public with sharing class RoutingEngine {
                 return result;
             }
 
-            // ── Allow_Multiple gate (1 SOQL) — BEFORE candidate query ────
+            // ── Phase 3: Per-config capacity gate (1 SOQL) ───────────────
             // DryRun still evaluates this gate to accurately simulate behavior.
+            //
+            // Metadata-driven ceiling:
+            //   • Routing_Config__mdt.Max_Capacity__c  — per-config cap
+            //     (default 1 when null, resolved in ConfigBundle)
+            //   • Closed_Status_Field_API_Name__c + Closed_Status_Values__c
+            //     — excludes already-completed work so a closed record can
+            //       never block a new assignment (fixes latent bug where the
+            //       owner field on a closed Case/Opp never changes).
+            //
+            // Skipped entirely when Allow_Multiple__c = true (unlimited).
             if (!bundle.allowMultiple) {
+                Integer cap = bundle.maxCapacity; // guaranteed >= 1
                 List<SObject> existing = AssignmentSelector.queryOwnedRecords(
                     bundle.objectApiName,
                     bundle.ownerFieldApiName,
-                    agentUserId
+                    agentUserId,
+                    bundle.closedStatusFieldApiName,
+                    bundle.closedStatusValues,
+                    cap
                 );
-                if (!existing.isEmpty()) {
-                    Logger.info('Agent already assigned (Allow_Multiple=false)'
+                if (existing.size() >= cap) {
+                    Logger.info('Agent at per-config capacity'
                             + ' | config=' + bundle.developerName
                             + ' | agent=' + agentUserId
+                            + ' | open=' + existing.size()
+                            + ' | cap=' + cap
                             + (isDryRun ? ' | dryRun=true' : ''))
                         .category(Logger.Category.ASSIGNMENT)
                         .inClass(CLS).inMethod('processBundle')

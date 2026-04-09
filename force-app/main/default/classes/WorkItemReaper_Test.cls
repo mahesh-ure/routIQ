@@ -72,6 +72,7 @@ private class WorkItemReaper_Test {
             Object_API_Name__c      = 'Case',
             Owner_Field_API_Name__c = 'OwnerId',
             Active__c               = true,
+            Closed_Status_Field_API_Name__c = 'Status',
             Closed_Status_Values__c = 'Closed',
             Candidate_Limit__c      = 50,
             Max_Retry_Attempts__c   = 1
@@ -312,7 +313,151 @@ private class WorkItemReaper_Test {
     }
 
     // =========================================================================
-    // 9. ZOMBIE REGRESSION — THE EXACT BUG REPORTED
+    // 9. METADATA-DRIVEN CLOSED STATUS FIELD — OPPORTUNITY / STAGENAME
+    // =========================================================================
+
+    /**
+     * @description Verifies the reaper respects per-config
+     *              Closed_Status_Field_API_Name__c. Here the config targets
+     *              Opportunity and uses StageName (not Status), so a
+     *              'Closed Won' Opp must be reaped without the reaper
+     *              needing any hardcoded Opportunity knowledge.
+     */
+    @IsTest
+    static void reapForAgent_opportunityStageName_reapsClosedStage() {
+        Agent__c agent = getAgent();
+
+        // Inject an Opportunity-targeted config
+        String oppConfigName = 'Test_Opp_Reaper';
+        Routing_Config__mdt oppCfg = new Routing_Config__mdt(
+            DeveloperName                   = oppConfigName,
+            MasterLabel                     = 'Test Opp Reaper',
+            Object_API_Name__c              = 'Opportunity',
+            Owner_Field_API_Name__c         = 'OwnerId',
+            Active__c                       = true,
+            Closed_Status_Field_API_Name__c = 'StageName',
+            Closed_Status_Values__c         = 'Closed Won,Closed Lost',
+            Candidate_Limit__c              = 50,
+            Max_Retry_Attempts__c           = 1
+        );
+        RoutingConfigSelector.mockConfigs =
+            new Map<String, Routing_Config__mdt>{ oppConfigName => oppCfg };
+
+        // Create an Opportunity in a closed stage
+        Opportunity opp = new Opportunity(
+            Name      = 'Zombie Opp',
+            StageName = 'Closed Won',
+            CloseDate = Date.today()
+        );
+        insert opp;
+
+        // Create a work item tied to the Opp config
+        Agent_Work_Item__c item = new Agent_Work_Item__c(
+            Agent__c                 = agent.Id,
+            Record_Id__c             = String.valueOf(opp.Id),
+            Object_API_Name__c       = 'Opportunity',
+            Config_Developer_Name__c = oppConfigName,
+            Assigned_At__c           = System.now(),
+            Status__c                = 'Active'
+        );
+        insert item;
+
+        Test.startTest();
+        Integer reaped = WorkItemReaper.reapForAgent(agent.Id);
+        Test.stopTest();
+
+        System.assertEquals(1, reaped,
+            'Closed Won Opportunity zombie should be reaped via StageName');
+
+        List<Agent_Work_Item__c> remaining = [
+            SELECT Id FROM Agent_Work_Item__c WHERE Agent__c = :agent.Id
+        ];
+        System.assertEquals(0, remaining.size(),
+            'No Opp work items should remain');
+    }
+
+    // =========================================================================
+    // 10. GRACEFUL DEGRADATION — CLOSED FIELD NOT CONFIGURED
+    // =========================================================================
+
+    /**
+     * @description When the new Closed_Status_Field_API_Name__c is blank,
+     *              closure detection is intentionally disabled — only
+     *              deletion detection applies. Open Cases are preserved and
+     *              closed Cases are preserved (admin has opted out of
+     *              status-based cleanup).
+     */
+    @IsTest
+    static void reapForAgent_blankClosedField_preservesClosedRecord() {
+        Agent__c agent = getAgent();
+
+        // Inject a config WITHOUT Closed_Status_Field_API_Name__c
+        Routing_Config__mdt cfg = new Routing_Config__mdt(
+            DeveloperName                   = CONFIG_DEV_NAME,
+            MasterLabel                     = 'Test Case Reaper (no closed field)',
+            Object_API_Name__c              = 'Case',
+            Owner_Field_API_Name__c         = 'OwnerId',
+            Active__c                       = true,
+            // Closed_Status_Field_API_Name__c intentionally omitted
+            Closed_Status_Values__c         = 'Closed',
+            Candidate_Limit__c              = 50,
+            Max_Retry_Attempts__c           = 1
+        );
+        RoutingConfigSelector.mockConfigs =
+            new Map<String, Routing_Config__mdt>{ CONFIG_DEV_NAME => cfg };
+
+        Case closed = insertCase('Still "Closed" but no field', 'Closed');
+        insertWorkItem(agent.Id, closed.Id);
+
+        Test.startTest();
+        Integer reaped = WorkItemReaper.reapForAgent(agent.Id);
+        Test.stopTest();
+
+        System.assertEquals(0, reaped,
+            'No closed field configured → closure detection disabled');
+
+        List<Agent_Work_Item__c> remaining = [
+            SELECT Id FROM Agent_Work_Item__c WHERE Agent__c = :agent.Id
+        ];
+        System.assertEquals(1, remaining.size(),
+            'Work item should survive when closure detection is disabled');
+    }
+
+    /**
+     * @description Even with no closed field, deletion detection must still
+     *              work — the reaper's safety net for orphaned work items
+     *              does not depend on closed-status config.
+     */
+    @IsTest
+    static void reapForAgent_blankClosedField_stillReapsDeleted() {
+        Agent__c agent = getAgent();
+
+        Routing_Config__mdt cfg = new Routing_Config__mdt(
+            DeveloperName           = CONFIG_DEV_NAME,
+            MasterLabel             = 'Test Case Reaper (no closed field)',
+            Object_API_Name__c      = 'Case',
+            Owner_Field_API_Name__c = 'OwnerId',
+            Active__c               = true,
+            Candidate_Limit__c      = 50,
+            Max_Retry_Attempts__c   = 1
+        );
+        RoutingConfigSelector.mockConfigs =
+            new Map<String, Routing_Config__mdt>{ CONFIG_DEV_NAME => cfg };
+
+        Case c = insertCase('Delete me', 'New');
+        insertWorkItem(agent.Id, c.Id);
+        delete c;
+
+        Test.startTest();
+        Integer reaped = WorkItemReaper.reapForAgent(agent.Id);
+        Test.stopTest();
+
+        System.assertEquals(1, reaped,
+            'Deletion detection must still work without closed field config');
+    }
+
+    // =========================================================================
+    // 11. ZOMBIE REGRESSION — THE EXACT BUG REPORTED
     // =========================================================================
 
     /**

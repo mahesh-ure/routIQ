@@ -63,6 +63,7 @@ private class SLAEscalationJob_Test {
             Acted_On_Value__c = 'Working',
             Escalation_Return_Owner__c = null,
             Candidate_Limit__c = 50,
+            Closed_Status_Field_API_Name__c = 'Status',
             Closed_Status_Values__c = 'Closed',
             Max_Retry_Attempts__c = 1
         );

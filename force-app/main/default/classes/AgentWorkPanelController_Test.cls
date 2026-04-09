@@ -47,6 +47,7 @@ private class AgentWorkPanelController_Test {
             Defer_Reset_Field__c = 'OwnerId',
             Defer_Reset_Value__c = null,
             Candidate_Limit__c = 50,
+            Closed_Status_Field_API_Name__c = 'Status',
             Closed_Status_Values__c = 'Closed',
             Max_Retry_Attempts__c = 1
         );

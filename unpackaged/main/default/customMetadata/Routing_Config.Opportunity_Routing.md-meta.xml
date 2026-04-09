@@ -3,20 +3,80 @@
     <label>Opportunity Routing</label>
     <protected>false</protected>
     <values>
+        <field>Acted_On_Field__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Acted_On_Value__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
         <field>Active__c</field>
         <value xsi:type="xsd:boolean">true</value>
     </values>
     <values>
         <field>Allow_Multiple__c</field>
-        <value xsi:type="xsd:boolean">false</value>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Assignment_Field__c</field>
+        <value xsi:nil="true"/>
     </values>
     <values>
         <field>Candidate_Limit__c</field>
-        <value xsi:type="xsd:double">25.0</value>
+        <value xsi:type="xsd:double">3.0</value>
+    </values>
+    <values>
+        <field>Closed_Status_Field_API_Name__c</field>
+        <value xsi:type="xsd:string">StageName</value>
     </values>
     <values>
         <field>Closed_Status_Values__c</field>
         <value xsi:type="xsd:string">Closed Won,Closed Lost</value>
+    </values>
+    <values>
+        <field>Defer_Reset_Field__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Defer_Reset_Value__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Escalation_Action__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Escalation_Enabled__c</field>
+        <value xsi:type="xsd:boolean">false</value>
+    </values>
+    <values>
+        <field>Escalation_Notify_Email__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Escalation_Return_Owner__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Escalation_Threshold_Pct__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Include_Busy_Agents__c</field>
+        <value xsi:type="xsd:boolean">false</value>
+    </values>
+    <values>
+        <field>Max_Capacity__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Max_Retry_Attempts__c</field>
+        <value xsi:nil="true"/>
     </values>
     <values>
         <field>Object_API_Name__c</field>
@@ -28,7 +88,7 @@
     </values>
     <values>
         <field>Pre_Assignment_Owner_Type__c</field>
-        <value xsi:nil="true"/>
+        <value xsi:type="xsd:string">Integration User</value>
     </values>
     <values>
         <field>Priority_Weight__c</field>
@@ -36,6 +96,14 @@
     </values>
     <values>
         <field>Record_Type_Dev_Name__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>SLA_Deadline_Field__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>SLA_Minutes__c</field>
         <value xsi:nil="true"/>
     </values>
     <values>

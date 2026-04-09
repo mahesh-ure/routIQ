@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Closed_Status_Field_API_Name__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>API name of the field on the target SObject that holds the record&apos;s closed/completed status. Its value is compared against the entries in Closed_Status_Values__c to decide whether a record is done. Used in two places: (1) Phase 3 Open Work Item Gate — skips agents who already have an OPEN record of this type (closed ones are ignored); (2) WorkItemReaper — completes zombie Agent_Work_Item__c rows whose source record is already closed. Examples: &apos;Status&apos; for Case / Lead / Task, &apos;StageName&apos; for Opportunity, &apos;State__c&apos; or any custom status field on a custom object. Leave blank only if the object has no closure concept — closure-based cleanup and Allow_Multiple filtering will then rely solely on deletion/reassignment detection.</description>
+    <inlineHelpText>API name of the field that marks a record closed (e.g. Status, StageName, State__c). Values are matched against Closed_Status_Values__c.</inlineHelpText>
+    <label>Closed Status Field API Name</label>
+    <length>255</length>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

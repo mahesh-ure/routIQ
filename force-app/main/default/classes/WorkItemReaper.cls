@@ -39,7 +39,6 @@
 public with sharing class WorkItemReaper {
 
     private static final String CLS = 'WorkItemReaper';
-    private static final String STATUS_FIELD = 'Status';
 
     // =========================================================================
     // PUBLIC API
@@ -99,8 +98,15 @@ public with sharing class WorkItemReaper {
      *              source record is in a configured closed status or no
      *              longer exists, and completes them via WorkItemService.
      *
-     *              Work items are grouped by Object_API_Name__c so we issue
-     *              at most one SOQL per distinct object type.
+     *              Work items are grouped by Config_Developer_Name__c so
+     *              each group is evaluated against its own Routing_Config:
+     *                • Object_API_Name__c         — target SObject
+     *                • Closed_Status_Field_API_Name__c — the status field
+     *                • Closed_Status_Values__c    — closed values
+     *
+     *              This lets the reaper handle any object/status field
+     *              combo (Case.Status, Opportunity.StageName, Lead.Status,
+     *              My_Object__c.State__c, …) without hardcoding.
      *
      * @param items List of active work items to evaluate
      * @return Number of items reaped
@@ -115,33 +121,37 @@ public with sharing class WorkItemReaper {
         Map<String, Routing_Config__mdt> configs =
             RoutingConfigSelector.getAllConfigs();
 
-        // ── Group work items by object type ─────────────────────────────
-        Map<String, List<Agent_Work_Item__c>> byObject =
+        // ── Group work items by config developer name ──────────────────
+        // Each config knows its own object + closed-status field + values.
+        Map<String, List<Agent_Work_Item__c>> byConfig =
             new Map<String, List<Agent_Work_Item__c>>();
 
         for (Agent_Work_Item__c item : items) {
-            if (String.isBlank(item.Object_API_Name__c)) {
+            String cfgName = item.Config_Developer_Name__c;
+            if (String.isBlank(cfgName)) {
                 continue;
             }
-            if (!byObject.containsKey(item.Object_API_Name__c)) {
-                byObject.put(
-                    item.Object_API_Name__c,
-                    new List<Agent_Work_Item__c>()
-                );
+            if (!byConfig.containsKey(cfgName)) {
+                byConfig.put(cfgName, new List<Agent_Work_Item__c>());
             }
-            byObject.get(item.Object_API_Name__c).add(item);
+            byConfig.get(cfgName).add(item);
         }
 
-        // ── Process each object group ───────────────────────────────────
+        // ── Process each config group ───────────────────────────────────
         Set<String> recordIdsToComplete = new Set<String>();
 
-        for (String objectApiName : byObject.keySet()) {
-            reapObjectGroup(
-                objectApiName,
-                byObject.get(objectApiName),
-                configs,
-                recordIdsToComplete
-            );
+        for (String cfgName : byConfig.keySet()) {
+            Routing_Config__mdt cfg = configs.get(cfgName);
+            if (cfg == null) {
+                // Config has been removed — every item under it is orphaned
+                for (Agent_Work_Item__c item : byConfig.get(cfgName)) {
+                    if (String.isNotBlank(item.Record_Id__c)) {
+                        recordIdsToComplete.add(item.Record_Id__c);
+                    }
+                }
+                continue;
+            }
+            reapConfigGroup(cfg, byConfig.get(cfgName), recordIdsToComplete);
         }
 
         if (recordIdsToComplete.isEmpty()) {
@@ -161,45 +171,46 @@ public with sharing class WorkItemReaper {
     }
 
     /**
-     * @description Handles one object's worth of work items: queries their
-     *              source records and adds any that are closed or missing
-     *              to the reap set.
+     * @description Handles one config's worth of work items: queries their
+     *              source records using the config's
+     *              Closed_Status_Field_API_Name__c and flags closed or
+     *              deleted records for reaping.
      *
-     *              Uses 1 SOQL per object. Gracefully skips objects that
-     *              no longer exist, have no Status field, or for which no
-     *              closed values are configured.
+     *              Cost: 1 SOQL per config group.
+     *
+     *              Graceful degradation:
+     *               • Object no longer exists → everything orphaned → reap all.
+     *               • Closed field missing / not configured → closure
+     *                 detection is disabled for this group, but deletion
+     *                 detection still runs.
+     *               • Closed values blank → same as above.
      */
-    private static void reapObjectGroup(
-        String objectApiName,
-        List<Agent_Work_Item__c> objectItems,
-        Map<String, Routing_Config__mdt> configs,
+    private static void reapConfigGroup(
+        Routing_Config__mdt cfg,
+        List<Agent_Work_Item__c> configItems,
         Set<String> recordIdsToComplete
     ) {
-        // ── Collect record IDs and union of closed values across configs ─
-        Set<Id>     recIdSet       = new Set<Id>();
-        Set<String> closedValuesSet = new Set<String>();
+        String objectApiName = cfg.Object_API_Name__c;
+        String closedField   = cfg.Closed_Status_Field_API_Name__c;
 
-        for (Agent_Work_Item__c item : objectItems) {
-            // Parse record Id (skip malformed)
-            Id recId;
-            try {
-                recId = Id.valueOf(item.Record_Id__c);
-            } catch (Exception ex) {
-                continue;
-            }
-            recIdSet.add(recId);
-
-            // Pull this config's closed values
-            Routing_Config__mdt cfg =
-                configs.get(item.Config_Developer_Name__c);
-            if (cfg == null || String.isBlank(cfg.Closed_Status_Values__c)) {
-                continue;
-            }
+        // Parse closed values for this config
+        Set<String> closedValues = new Set<String>();
+        if (String.isNotBlank(cfg.Closed_Status_Values__c)) {
             for (String s : cfg.Closed_Status_Values__c.split(',')) {
                 String trimmed = s.trim();
                 if (String.isNotBlank(trimmed)) {
-                    closedValuesSet.add(trimmed);
+                    closedValues.add(trimmed);
                 }
+            }
+        }
+
+        // Collect record Ids (skip malformed)
+        Set<Id> recIdSet = new Set<Id>();
+        for (Agent_Work_Item__c item : configItems) {
+            try {
+                recIdSet.add(Id.valueOf(item.Record_Id__c));
+            } catch (Exception ex) {
+                // malformed — skip
             }
         }
 
@@ -207,7 +218,7 @@ public with sharing class WorkItemReaper {
             return;
         }
 
-        // ── Validate object and Status field exist ──────────────────────
+        // Validate object exists
         Schema.SObjectType sot =
             Schema.getGlobalDescribe().get(objectApiName);
         if (sot == null) {
@@ -218,12 +229,18 @@ public with sharing class WorkItemReaper {
             return;
         }
 
+        // Can we evaluate closed status for this config?
         Map<String, Schema.SObjectField> fieldMap =
             sot.getDescribe().fields.getMap();
-        Boolean hasStatusField = fieldMap.containsKey(STATUS_FIELD.toLowerCase());
+        Boolean canEvalClosed =
+               String.isNotBlank(closedField)
+            && !closedValues.isEmpty()
+            && fieldMap.containsKey(closedField.toLowerCase());
 
         // ── Query source records (1 SOQL) ───────────────────────────────
-        String selectList = hasStatusField ? 'Id, Status' : 'Id';
+        String selectList = canEvalClosed
+            ? ('Id, ' + closedField)
+            : 'Id';
         String soql = 'SELECT ' + selectList
                     + ' FROM '  + objectApiName
                     + ' WHERE Id IN :recIdSet';
@@ -239,9 +256,10 @@ public with sharing class WorkItemReaper {
         } catch (Exception ex) {
             Logger.warn('WorkItemReaper query failed'
                     + ' | object=' + objectApiName
+                    + ' | config=' + cfg.DeveloperName
                     + ' | ' + ex.getMessage())
                 .category(Logger.Category.ENGINE)
-                .inClass(CLS).inMethod('reapObjectGroup')
+                .inClass(CLS).inMethod('reapConfigGroup')
                 .log();
             return;
         }
@@ -256,20 +274,15 @@ public with sharing class WorkItemReaper {
                 continue;
             }
 
-            // No Status field on object → can't determine closed; leave it
-            if (!hasStatusField) {
-                continue;
-            }
-
-            // No closed values configured → can't determine closed; leave it
-            if (closedValuesSet.isEmpty()) {
+            // Closure detection disabled for this config → leave it
+            if (!canEvalClosed) {
                 continue;
             }
 
             // Source record in closed status → reap
-            Object statusVal = rec.get(STATUS_FIELD);
+            Object statusVal = rec.get(closedField);
             if (statusVal != null
-                && closedValuesSet.contains(String.valueOf(statusVal))) {
+                && closedValues.contains(String.valueOf(statusVal))) {
                 recordIdsToComplete.add(String.valueOf(recId));
             }
         }
