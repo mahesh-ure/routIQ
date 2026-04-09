@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Work Item Reaper</label>
+    <protected>false</protected>
+    <values>
+        <field>Job_Class_Name__c</field>
+        <value xsi:type="xsd:string">WorkItemReaperJob</value>
+    </values>
+    <values>
+        <field>Interval_Minutes__c</field>
+        <value xsi:type="xsd:double">15.0</value>
+    </values>
+    <values>
+        <field>Is_Enabled__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">Sweeps zombie work items org-wide. Completes any Agent_Work_Item__c whose source record is in a closed status (per Routing_Config.Closed_Status_Values) or has been deleted, and re-syncs affected agents' Current_Load__c. Safety net that keeps load counters honest even without a Record-Triggered Flow wired to WorkItemService.completeWorkItem.</value>
+    </values>
+</CustomMetadata>

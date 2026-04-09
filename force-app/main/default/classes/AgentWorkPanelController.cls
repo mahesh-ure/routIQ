@@ -132,6 +132,19 @@ public with sharing class AgentWorkPanelController {
      */
     @AuraEnabled
     public static WorkAssignment getNextWork(String configDevName) {
+        // Self-heal: reap any zombie work items (closed/deleted source records)
+        // for this agent BEFORE the capacity check runs in AssignmentResolver.
+        // This keeps Current_Load__c honest even when no Record-Triggered Flow
+        // is wired to the invocable closer. Safe no-op if nothing to reap.
+        try {
+            WorkItemReaper.reapForCurrentUser();
+        } catch (Exception ex) {
+            Logger.warn('Pre-pull reap failed | ' + ex.getMessage())
+                .category(Logger.Category.ENGINE)
+                .inClass(CLS).inMethod('getNextWork')
+                .log();
+        }
+
         // Delegate to RoutingService (agent resolved internally via UserInfo)
         RoutingResult result = RoutingService.getNextRecord(
             null,       // objectApiName -- engine resolves from config

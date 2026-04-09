@@ -226,8 +226,19 @@ private class AgentWorkPanelController_Test {
         );
         insert testCase;
 
-        // Set agent load to 1 so decrement works
+        // Create a real Agent_Work_Item__c so deferWorkItem has something
+        // to delete (load is now derived from COUNT of active work items,
+        // not an independent counter field).
         Agent__c agent = [SELECT Id FROM Agent__c LIMIT 1];
+        Agent_Work_Item__c workItem = new Agent_Work_Item__c(
+            Agent__c                 = agent.Id,
+            Record_Id__c             = String.valueOf(testCase.Id),
+            Object_API_Name__c       = 'Case',
+            Config_Developer_Name__c = CONFIG_DEV_NAME,
+            Assigned_At__c           = System.now(),
+            Status__c                = 'Active'
+        );
+        insert workItem;
         agent.Current_Load__c = 1;
         update agent;
 
