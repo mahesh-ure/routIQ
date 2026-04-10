@@ -1,10 +1,14 @@
 /**
  * @description Test class for AgentWorkPanelController (Layer 5).
- *              Tests all four @AuraEnabled methods:
+ *              Tests all five @AuraEnabled methods:
  *              - getAgentContext: valid agent, no agent
+ *              - refreshAgentContext: reaper-on-refresh tick (returns same shape)
  *              - getNextWork: delegates to RoutingService (integration-level)
  *              - deferWork: valid defer, missing config, missing defer field
- *              - getQueueDepth: valid count, missing config
+ *              - getQueueDepth: valid count, missing config, AND the
+ *                blank/null fallback that sums across all active configs
+ *                (the contract that lets the LWC's @wire(getQueueDepth)
+ *                work out-of-the-box before the admin binds configDevName)
  *
  *              Uses mock CMDT injection via RoutingConfigSelector.mockConfigs
  *              to avoid deploying test metadata.
@@ -95,6 +99,46 @@ private class AgentWorkPanelController_Test {
 
         System.assert(exceptionThrown,
             'Should throw AuraHandledException when no agent exists');
+    }
+
+    // =========================================================================
+    // 1b. refreshAgentContext TESTS (auto-refresh tick + zombie reap)
+    // =========================================================================
+
+    @IsTest
+    static void refreshAgentContext_validAgent_returnsContextAndReapsSafely() {
+        // No work items exist → reaper is a no-op → context still returns
+        Test.startTest();
+        AgentWorkPanelController.AgentContext ctx =
+            AgentWorkPanelController.refreshAgentContext();
+        Test.stopTest();
+
+        System.assertNotEquals(null, ctx,
+            'refreshAgentContext should return a context');
+        System.assertNotEquals(null, ctx.agentId,
+            'Agent Id should be populated post-reap');
+        System.assertEquals('Online', ctx.status,
+            'Status should pass through unchanged');
+        System.assertEquals(10, ctx.maxCapacity,
+            'Capacity should pass through unchanged');
+    }
+
+    @IsTest
+    static void refreshAgentContext_noAgent_throwsException() {
+        // No agent record at all → both reap (silent) and load (throws) run
+        delete [SELECT Id FROM Agent__c];
+
+        Boolean exceptionThrown = false;
+        Test.startTest();
+        try {
+            AgentWorkPanelController.refreshAgentContext();
+        } catch (AuraHandledException e) {
+            exceptionThrown = true;
+        }
+        Test.stopTest();
+
+        System.assert(exceptionThrown,
+            'refreshAgentContext should throw when no agent exists');
     }
 
     // =========================================================================
@@ -267,19 +311,60 @@ private class AgentWorkPanelController_Test {
     // =========================================================================
 
     @IsTest
-    static void getQueueDepth_blankConfig_throwsException() {
-        Boolean exceptionThrown = false;
+    static void getQueueDepth_blankConfig_returnsSumOfAllActive() {
+        // New fallback contract: blank/null configDevName MUST NOT throw —
+        // it returns the sum of pending candidates across all active
+        // routing configs so the panel widget works out-of-the-box on a
+        // fresh install before the admin has bound the panel to a config.
+        injectMockConfig();
+
+        // Seed the queue with a few open Cases that the mock config (Case
+        // object, Closed status excluded) will count.
+        List<Case> cases = new List<Case>();
+        for (Integer i = 0; i < 4; i++) {
+            cases.add(new Case(Subject = 'Fallback Open ' + i, Status = 'New'));
+        }
+        insert cases;
 
         Test.startTest();
-        try {
-            AgentWorkPanelController.getQueueDepth('');
-        } catch (AuraHandledException e) {
-            exceptionThrown = true;
-        }
+        Integer blankCount = AgentWorkPanelController.getQueueDepth('');
+        Integer nullCount  = AgentWorkPanelController.getQueueDepth(null);
         Test.stopTest();
 
-        System.assert(exceptionThrown,
-            'Should throw when configDevName is blank');
+        System.assert(blankCount >= 4,
+            'Blank configDevName should sum across active configs '
+            + '(expected ≥ 4, got ' + blankCount + ')');
+        System.assertEquals(blankCount, nullCount,
+            'Null and blank configDevName must behave identically');
+    }
+
+    @IsTest
+    static void getQueueDepth_blankConfig_skipsInactiveConfigs() {
+        // Build two configs: one active, one inactive. The inactive one
+        // points at a fictional object so if it WERE evaluated the test
+        // would explode — proving the Active__c filter works.
+        Routing_Config__mdt activeCfg = buildMockConfig();
+        Routing_Config__mdt inactiveCfg = new Routing_Config__mdt(
+            DeveloperName = 'Inactive_Bad_Config',
+            MasterLabel = 'Inactive Bad',
+            Object_API_Name__c = 'Totally_Fake_Object__c',
+            Active__c = false,
+            Closed_Status_Field_API_Name__c = 'Status',
+            Closed_Status_Values__c = 'Closed'
+        );
+        RoutingConfigSelector.mockConfigs = new Map<String, Routing_Config__mdt>{
+            CONFIG_DEV_NAME       => activeCfg,
+            'Inactive_Bad_Config' => inactiveCfg
+        };
+
+        Test.startTest();
+        Integer count = AgentWorkPanelController.getQueueDepth(null);
+        Test.stopTest();
+
+        // Should not throw — the inactive bad config must be skipped
+        // before its missing object would blow up countCandidatesForConfig.
+        System.assert(count >= 0,
+            'Inactive configs must be skipped, count must still return');
     }
 
     @IsTest

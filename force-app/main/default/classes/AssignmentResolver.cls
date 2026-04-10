@@ -78,10 +78,10 @@ public with sharing class AssignmentResolver {
     }
 
     /**
-     * @description Creates outcome when agent already owns a record
-     *              and Allow_Multiple__c is false.
+     * @description Creates outcome when the agent has already reached the
+     *              per-config Open Work Item cap (Max_Capacity__c).
      *              Public so RoutingEngine can call this from processBundle()
-     *              where Allow_Multiple is checked BEFORE candidate query
+     *              where the gate is checked BEFORE the candidate query
      *              to avoid wasting SOQL.
      */
     public static AssignmentOutcome outcomeAlreadyAssigned() {
@@ -91,7 +91,7 @@ public with sharing class AssignmentResolver {
         o.retryCount = 0;
         o.candidateCount = 0;
         o.status = 'No_Match';
-        o.errorMessage = 'Agent already has an active assignment (Allow_Multiple = false).';
+        o.errorMessage = 'Agent has reached the per-config capacity (Max_Capacity__c) for this object type.';
         return o;
     }
 
@@ -232,11 +232,11 @@ public with sharing class AssignmentResolver {
 
         Integer candidateCount = candidates.size();
 
-        // NOTE: Allow_Multiple__c is enforced by RoutingEngine.processBundle()
-        // BEFORE the candidate query. This saves 1 SOQL when the agent is
-        // already assigned. The check uses dirty reads from prior bundle DML
-        // within the same transaction — atomically correct for per-bundle
-        // enforcement across different object types.
+        // NOTE: The Open Work Item Gate (Max_Capacity__c / Ignore_Capacity__c)
+        // is enforced by RoutingEngine.processBundle() BEFORE the candidate
+        // query. This saves 1 SOQL when the agent is at cap. The check uses
+        // dirty reads from prior bundle DML within the same transaction —
+        // atomically correct for per-bundle enforcement.
 
         // ─── Lock first available candidate (uses config's maxRetryAttempts) ─
         RetryLockHandler.RetryOutcome lockOutcome = RetryLockHandler.lockFirstAvailable(

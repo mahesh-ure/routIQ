@@ -4,8 +4,8 @@
  *              Two primary operations:
  *              1. lockRecord — SELECT … FOR UPDATE on a single candidate to acquire
  *                 a pessimistic row lock before updating the owner field.
- *              2. queryOwnedRecords — checks an agent's existing assignments for
- *                 Allow_Multiple__c enforcement.
+ *              2. queryOwnedRecords — counts an agent's open records for the
+ *                 Phase 3 Open Work Item Gate (Max_Capacity__c enforcement).
  *
  *              All queries use Database.queryWithBinds() with AccessLevel.USER_MODE
  *              for FLS enforcement and bind-variable-only SOQL (zero injection surface).
@@ -84,7 +84,7 @@ public with sharing class AssignmentSelector {
      *                 Closed_Status_Values__c are both supplied, the query
      *                 adds "<statusField> NOT IN :closedValues" so already-
      *                 completed records never block new assignments (fixes
-     *                 the latent Allow_Multiple bug where the owner field
+     *                 the latent capacity-gate bug where the owner field
      *                 does not change when a record is closed).
      *              2. Per-config capacity — LIMIT is driven by
      *                 Routing_Config__mdt.Max_Capacity__c. Caller compares
