@@ -9,24 +9,49 @@
  *              - Next Best Action button (delegates to RoutingService)
  *              - SLA countdown timer (JS-only, zero server calls per tick)
  *              - Defer button (resets configured field, publishes DEFERRED event)
- *              - Queue depth indicator
+ *              - Queue depth indicator (wired, reactive on configDevName)
  *              - Current load / capacity display
+ *              - 10s auto-refresh tick that runs the WorkItemReaper server-side
+ *                so Current Load drops as soon as the agent closes a record
+ *
+ *              Server interactions (split by purpose, NOT consolidated):
+ *
+ *              READS (cacheable, @wire-bound, LDS-cached):
+ *                - getAgentContext  → wiredAgent  (initial agent state)
+ *                - getQueueDepth    → wiredQueue  (reactive on $configDevName,
+ *                                                  falls back to all-active
+ *                                                  configs when blank)
+ *
+ *              READ + SELF-HEAL (non-cacheable, runs DML via reaper):
+ *                - refreshAgentContext  (10s tick — reaps zombie work items
+ *                                        then returns fresh AgentContext)
+ *
+ *              MUTATIONS (non-cacheable, imperative):
+ *                - getNextWork          (route + assign + publish PE)
+ *                - deferWork            (reset field + delete work item + PE)
+ *                - updateAgentStatus    (availability toggle)
+ *
+ *              The split exists because Salesforce forbids DML inside
+ *              cacheable=true methods, and @wire only accepts cacheable
+ *              methods. So mutations + reaper-driven refresh stay imperative.
  *
  *              Design:
  *              - All text via Custom Labels (i18n)
  *              - No lwc:dom="manual", no innerHTML (XSS-safe)
- *              - Imperative Apex calls (mutations, not reads)
+ *              - configDevName is @api so admins can bind the panel to a
+ *                specific config from App Builder; blank works out-of-box
  *              - connectedCallback / disconnectedCallback for timer lifecycle
  *
  * @group UI
  */
-import { LightningElement, track, wire } from 'lwc';
+import { LightningElement, api, track, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { refreshApex } from '@salesforce/apex';
 
 // ── Apex Methods ────────────────────────────────────────────────────────────
 import getAgentContext from '@salesforce/apex/AgentWorkPanelController.getAgentContext';
+import refreshAgentContext from '@salesforce/apex/AgentWorkPanelController.refreshAgentContext';
 import getNextWork from '@salesforce/apex/AgentWorkPanelController.getNextWork';
 import deferWork from '@salesforce/apex/AgentWorkPanelController.deferWork';
 import getQueueDepth from '@salesforce/apex/AgentWorkPanelController.getQueueDepth';
@@ -57,6 +82,12 @@ import LABEL_NO_RECORDS from '@salesforce/label/c.URE_NoRecordsAvailable';
 import LABEL_UNEXPECTED_ERROR from '@salesforce/label/c.URE_UnexpectedError';
 import LABEL_LOADING_WORK from '@salesforce/label/c.URE_WorkPanelLoadingWork';
 import LABEL_ASSIGNED from '@salesforce/label/c.URE_Assigned';
+
+// ── Constants ──────────────────────────────────────────────────────────────
+// Auto-refresh interval for agent context + queue depth (client-side only).
+// Picked at 10s to keep the load/capacity counters in sync with reaper /
+// other agents' actions without flooding Apex.
+const AUTO_REFRESH_MS = 10000;
 
 export default class UreAgentWorkPanel extends NavigationMixin(LightningElement) {
 
@@ -89,8 +120,22 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     };
 
     // ─── Design attributes (set from App Builder) ───────────────────────
-    /** @api Optional: lock to a specific routing config */
-    configDevName = null;
+    /**
+     * Developer name of a specific Routing_Config__mdt to lock the panel to.
+     * Set by the admin from App Builder via the targetConfig in meta.xml.
+     *
+     * - Provided  → Get Next Work routes only against this config and the
+     *               Queue widget shows the count of pending candidates for
+     *               this config alone.
+     * - Blank/null → Get Next Work routes across all active configs and the
+     *               Queue widget shows the SUM of pending candidates across
+     *               every active routing config (server-side fallback in
+     *               AgentWorkPanelController.getQueueDepth).
+     *
+     * Reactive: changing this value re-fires both the @wire(getQueueDepth)
+     * binding and any future config-aware @wires automatically.
+     */
+    @api configDevName = null;
 
     // ─── Agent context state ────────────────────────────────────────────
     @track agentContext = null;
@@ -104,7 +149,12 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     isDeferring = false;
 
     // ─── Queue depth ────────────────────────────────────────────────────
-    queueCount = null;
+    // Populated by the @wire(getQueueDepth) binding below — never set
+    // imperatively. Use refreshApex(this._wiredQueueResult) to force a
+    // re-fetch (e.g. after a routing assignment or defer mutation drains
+    // the queue, or on every auto-refresh tick to keep the number honest).
+    @track queueCount = null;
+    _wiredQueueResult;
 
     // ─── SLA countdown ──────────────────────────────────────────────────
     _slaTimerId = null;
@@ -114,10 +164,28 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     _slaDeadlineMs = null;
     _slaStartMs = null;
 
+    // ─── Auto-refresh (client-side only) ────────────────────────────────
+    // Re-pulls agent context (currentLoad / maxCapacity / status) and
+    // queue depth on a fixed interval. No router calls — purely
+    // informational so the panel stays in sync with reaper / other agents.
+    _autoRefreshTimerId = null;
+    _visibilityHandler = null;
+
     // =========================================================================
     // WIRED DATA
     // =========================================================================
 
+    /**
+     * Wired loader for the running user's Agent__c context (status, current
+     * load, max capacity, last assigned). cacheable=true on the Apex side, so
+     * Lightning Data Service caches the result across components and tabs.
+     *
+     * Refreshed by:
+     *   - refreshApex(this._wiredAgentResult) after a defer/route mutation
+     *   - The 10-second auto-refresh tick (which delegates to the
+     *     non-cacheable refreshAgentContext() so the WorkItemReaper can
+     *     also drop drift before returning the new context)
+     */
     @wire(getAgentContext)
     wiredAgent(result) {
         this._wiredAgentResult = result;
@@ -125,10 +193,41 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         if (data) {
             this.agentContext = data;
             this.agentError = false;
-            this._refreshQueueDepth();
         } else if (error) {
             this.agentContext = null;
             this.agentError = true;
+        }
+    }
+
+    /**
+     * Wired Queue Depth for the panel's "Queue" metric. Reactive on
+     * $configDevName so the count refreshes the moment the admin re-binds
+     * the panel to a different routing config in App Builder.
+     *
+     * Behaviour driven by AgentWorkPanelController.getQueueDepth:
+     *   - configDevName provided → COUNT() of pending candidates for THAT
+     *     config only.
+     *   - configDevName blank    → SUM of COUNT() across every active
+     *     routing config (server-side fallback so the widget works on a
+     *     fresh install before the admin has chosen a config).
+     *
+     * cacheable=true on the Apex side → LDS cache shared across components
+     * (e.g. utility bar panel + record-page panel see the same number with
+     * a single SOQL hit). Manual refreshes via refreshApex(_wiredQueueResult)
+     * happen on:
+     *   - successful Get Next Work (queue drained by 1)
+     *   - successful Defer        (record returns to queue)
+     *   - the 10-second auto-refresh tick (catches drains/inserts caused
+     *     by other agents and inbound integration traffic)
+     */
+    @wire(getQueueDepth, { configDevName: '$configDevName' })
+    wiredQueue(result) {
+        this._wiredQueueResult = result;
+        const { data, error } = result;
+        if (data !== undefined && data !== null) {
+            this.queueCount = data;
+        } else if (error) {
+            this.queueCount = null;
         }
     }
 
@@ -136,8 +235,13 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     // LIFECYCLE
     // =========================================================================
 
+    connectedCallback() {
+        this._startAutoRefresh();
+    }
+
     disconnectedCallback() {
         this._clearSlaTimer();
+        this._stopAutoRefresh();
     }
 
     // =========================================================================
@@ -187,6 +291,13 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         return `${this.agentContext.currentLoad || 0} / ${this.agentContext.maxCapacity || 0}`;
     }
 
+    /**
+     * Display value for the Queue metric in the panel header. Returns the
+     * raw count once the @wire(getQueueDepth) binding has resolved, or
+     * "--" while the wire is still in flight or has errored. The wire
+     * resolves with `null`/0 only on a clean empty result, so "--"
+     * specifically signals "not yet known", not "zero".
+     */
     get queueDisplay() {
         return this.queueCount != null ? this.queueCount : '--';
     }
@@ -272,9 +383,14 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                     variant: 'success'
                 }));
 
-                // Refresh agent context (load changed) and queue depth
+                // Refresh agent context (load changed) and queue depth.
+                // refreshApex on both wires invalidates the LDS cache and
+                // re-fetches from the server so the metrics reflect the
+                // post-routing state immediately.
                 await refreshApex(this._wiredAgentResult);
-                this._refreshQueueDepth();
+                if (this._wiredQueueResult) {
+                    refreshApex(this._wiredQueueResult);
+                }
             } else {
                 this.currentWork = null;
                 this._clearSlaTimer();
@@ -321,9 +437,13 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                 variant: 'success'
             }));
 
-            // Refresh agent context (load changed) and queue depth
+            // Refresh agent context (load changed) and queue depth.
+            // The deferred record returns to the candidate pool so the
+            // queue count should bump up by 1 on the re-fetch.
             await refreshApex(this._wiredAgentResult);
-            this._refreshQueueDepth();
+            if (this._wiredQueueResult) {
+                refreshApex(this._wiredQueueResult);
+            }
         } catch (error) {
             this.dispatchEvent(new ShowToastEvent({
                 title: this.label.deferError,
@@ -436,21 +556,105 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     }
 
     /**
-     * @description Refreshes queue depth count. Silently ignores errors
-     *              (queue depth is informational, not blocking).
+     * @description Starts the client-side auto-refresh loop. Re-pulls
+     *              agent context and queue depth every AUTO_REFRESH_MS.
+     *              Pauses while the tab is hidden (Page Visibility API)
+     *              to avoid wasted server traffic when the agent is
+     *              looking elsewhere.
      */
-    _refreshQueueDepth() {
-        const devName = this.configDevName;
-        if (!devName) {
-            this.queueCount = null;
+    _startAutoRefresh() {
+        // Defensive: never double-start
+        this._stopAutoRefresh();
+
+        this._autoRefreshTimerId = setInterval(
+            () => this._tickAutoRefresh(),
+            AUTO_REFRESH_MS
+        );
+
+        // Pause/resume on tab visibility change
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            this._visibilityHandler = () => {
+                if (document.hidden) {
+                    if (this._autoRefreshTimerId) {
+                        clearInterval(this._autoRefreshTimerId);
+                        this._autoRefreshTimerId = null;
+                    }
+                } else if (!this._autoRefreshTimerId) {
+                    // Immediate refresh on resume so the agent sees fresh
+                    // numbers the moment they return to the tab
+                    this._tickAutoRefresh();
+                    this._autoRefreshTimerId = setInterval(
+                        () => this._tickAutoRefresh(),
+                        AUTO_REFRESH_MS
+                    );
+                }
+            };
+            document.addEventListener('visibilitychange', this._visibilityHandler);
+        }
+    }
+
+    /**
+     * @description Stops the auto-refresh loop and removes the
+     *              visibility listener. Idempotent.
+     */
+    _stopAutoRefresh() {
+        if (this._autoRefreshTimerId) {
+            clearInterval(this._autoRefreshTimerId);
+            this._autoRefreshTimerId = null;
+        }
+        if (this._visibilityHandler && typeof document !== 'undefined') {
+            document.removeEventListener('visibilitychange', this._visibilityHandler);
+            this._visibilityHandler = null;
+        }
+    }
+
+    /**
+     * One pulse of the 10-second auto-refresh loop. Keeps the panel's
+     * Current Load + Queue widgets honest without forcing the agent to
+     * reload the page. Skips work when:
+     *
+     *   - No agent context has loaded yet (first wire still in flight).
+     *   - A user-initiated route/defer is mid-flight (don't clobber the
+     *     optimistic UI mid-mutation — the mutation handler runs its own
+     *     refreshApex on completion).
+     *
+     * Two server interactions per tick:
+     *
+     *   1. refreshAgentContext (non-cacheable, AuraEnabled): runs the
+     *      WorkItemReaper for the running user server-side, completes any
+     *      Agent_Work_Item__c rows whose source record was closed/deleted
+     *      since the last tick, then returns the freshly-loaded
+     *      AgentContext. This is what makes the Current Load gauge drop
+     *      the moment the agent closes an assigned Case/Opp. The
+     *      response replaces this.agentContext directly — no refreshApex
+     *      needed because the payload shape matches the wired result.
+     *
+     *   2. refreshApex(_wiredQueueResult): re-runs getQueueDepth via the
+     *      LDS cache layer so the Queue metric reflects new candidates
+     *      arriving from inbound integrations or other agents pulling
+     *      work from the same pool.
+     *
+     * All errors are swallowed silently — this is a background refresh,
+     * not a user action, and a transient failure must not toast the
+     * agent or break the cadence.
+     */
+    _tickAutoRefresh() {
+        if (!this._wiredAgentResult || this.isRouting || this.isDeferring) {
             return;
         }
-        getQueueDepth({ configDevName: devName })
-            .then((count) => {
-                this.queueCount = count;
+        refreshAgentContext()
+            .then((ctx) => {
+                if (ctx) {
+                    this.agentContext = ctx;
+                }
             })
             .catch(() => {
-                this.queueCount = null;
+                // Silent — informational refresh, do not toast
             });
+        if (this._wiredQueueResult) {
+            refreshApex(this._wiredQueueResult).catch(() => {
+                // Silent — informational refresh, do not toast
+            });
+        }
     }
 }

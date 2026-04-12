@@ -31,7 +31,7 @@ public with sharing class ConfigBundle implements Comparable {
     public String objectApiName;
     public String ownerFieldApiName;
     public Integer candidateLimit;
-    public Boolean allowMultiple;
+    public Boolean ignoreCapacity;
     public Integer maxCapacity;
     public String preAssignmentOwnerType;
     public String closedStatusFieldApiName;
@@ -84,11 +84,19 @@ public with sharing class ConfigBundle implements Comparable {
         this.candidateLimit = (config.Candidate_Limit__c != null)
             ? config.Candidate_Limit__c.intValue()
             : 50;
-        this.allowMultiple = (config.Allow_Multiple__c == true);
+        // Ignore_Capacity__c is the master switch for the Phase 3 Open Work
+        // Item Gate. When TRUE the gate is skipped entirely (unlimited).
+        // When FALSE (default) Max_Capacity__c is enforced — or 1 if null.
+        this.ignoreCapacity = (config.Ignore_Capacity__c == true);
+        // Nullable on purpose:
+        //   null  → admin did not configure a per-config cap → falls back
+        //           to legacy default of 1 (unless ignoreCapacity=true)
+        //   N>=1  → admin explicitly set a per-config cap → enforced when
+        //           ignoreCapacity is false
         this.maxCapacity = (config.Max_Capacity__c != null
                 && config.Max_Capacity__c > 0)
             ? config.Max_Capacity__c.intValue()
-            : 1;
+            : null;
         this.preAssignmentOwnerType = config.Pre_Assignment_Owner_Type__c;
         this.closedStatusFieldApiName = config.Closed_Status_Field_API_Name__c;
         this.closedStatusValues = parseCommaDelimited(config.Closed_Status_Values__c);

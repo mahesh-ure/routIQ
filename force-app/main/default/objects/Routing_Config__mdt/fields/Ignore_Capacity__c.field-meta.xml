@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Ignore_Capacity__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <defaultValue>false</defaultValue>
+    <description>Master switch that disables the per-config Open Work Item Gate for this routing config. When TRUE, the engine skips the open-work-item check entirely and an agent can receive unlimited records of this object type — Max_Capacity__c is IGNORED. When FALSE (default), the engine enforces Max_Capacity__c (or 1 if Max_Capacity__c is null). Use TRUE only for high-volume, fire-and-forget routing where the agent should never be blocked by existing open records (e.g. broadcast notifications, bulk task fan-out). For normal pull-based queue routing, leave this FALSE and tune Max_Capacity__c instead.</description>
+    <inlineHelpText>Check to let an agent receive unlimited records of this type (skips capacity check). Leave unchecked to enforce Max_Capacity__c.</inlineHelpText>
+    <label>Ignore Capacity</label>
+    <type>Checkbox</type>
+</CustomField>

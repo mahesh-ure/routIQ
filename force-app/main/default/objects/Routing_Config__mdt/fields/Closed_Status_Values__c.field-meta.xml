@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Closed_Status_Values__c</fullName>
     <fieldManageability>SubscriberControlled</fieldManageability>
-    <description>Comma-delimited status values considered closed. Drives the open-item eligibility check when Allow_Multiple__c is false. e.g. Closed,Resolved,Cancelled</description>
+    <description>Comma-delimited status values considered closed. Drives the Open Work Item Gate (Phase 3) — closed records are excluded from the agent&apos;s open-item count so they never block new assignments against Max_Capacity__c. Also drives WorkItemReaper&apos;s zombie cleanup. e.g. Closed,Resolved,Cancelled</description>
     <label>Closed Status Values</label>
     <length>1000</length>
     <type>LongTextArea</type>

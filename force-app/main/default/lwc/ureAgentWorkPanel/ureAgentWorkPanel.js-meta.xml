@@ -9,4 +9,13 @@
         <target>lightning__RecordPage</target>
         <target>lightning__AppPage</target>
     </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__UtilityBar">
+            <property
+                name="configDevName"
+                type="String"
+                label="Routing Config Developer Name"
+                description="Optional. Developer name of a specific Routing_Config__mdt to lock the panel to (e.g. Case_Routing). Leave blank to route across all active configs and show a queue depth summed across all of them."/>
+        </targetConfig>
+    </targetConfigs>
 </LightningComponentBundle>

@@ -8,7 +8,7 @@
  *                ConfigLoader      → load active configs          (0 SOQL — CMDT cached)
  *                RuleEvaluator     → filter applicable configs    (0 SOQL — in-memory)
  *                AgentMatcher      → capability type pre-filter   (0 SOQL — cached data)
- *                AssignmentSelector → Allow_Multiple check        (0–1 SOQL per bundle)
+ *                AssignmentSelector → Open Work Item Gate         (0–1 SOQL per bundle)
  *                ConditionBinder   → resolve bind variables       (0 SOQL — in-memory)
  *                DynamicQueryBuilder → assemble SOQL              (0 SOQL — string ops)
  *                CandidateSelector → execute candidate query      (1 SOQL per bundle)
@@ -22,9 +22,9 @@
  *                and audit-logged — transaction continues for remaining bundles.
  *              • Phase 5 audit flush is in the same transaction. If an unhandled
  *                exception escapes, both assignment and audit DML roll back atomically.
- *              • Allow_Multiple is per-bundle (not global) because each config targets
- *                different objects. SOQL within the same transaction sees dirty reads
- *                from prior bundle DML — this is atomically correct.
+ *              • Open Work Item Gate (Max_Capacity / Ignore_Capacity) is per-bundle
+ *                because each config targets different objects. SOQL within the same
+ *                transaction sees dirty reads from prior bundle DML — atomically correct.
  *
  *              Phase order (agent-first):
  *              1. Validate Request           (0 SOQL, 0 DML)
@@ -35,7 +35,7 @@
  *              6. Return Result
  *
  *              Governor budget per execution (typical single-config case):
- *                SOQL: 1 (agents) + 1 (caps) + 0 (CMDT) + 1 (allow_multi)
+ *                SOQL: 1 (agents) + 1 (caps) + 0 (CMDT) + 1 (open-item gate)
  *                      + 1 (candidates) + 1 (lock) = 5
  *                DML:  1 (assignment) + 1 (audit flush) = 2
  *
@@ -65,9 +65,9 @@ public with sharing class RoutingEngine {
         //
         // Phase 1–3 are READ-ONLY gates (0 DML). They can fail-fast without
         // side effects. Phase 4 contains DML (assignment + audit). Within
-        // the bundle loop, each bundle's Allow_Multiple SOQL sees dirty
-        // reads from prior bundles' DML — this is correct because
-        // Allow_Multiple is a per-config setting (Cases vs Leads).
+        // the bundle loop, each bundle's Open Work Item Gate SOQL sees
+        // dirty reads from prior bundles' DML — this is correct because
+        // capacity is a per-config setting (Cases vs Leads are independent).
         //
         // The entire transaction is atomic: if any unhandled exception
         // escapes, ALL DML (assignments + audit) rolls back together.
@@ -263,6 +263,12 @@ public with sharing class RoutingEngine {
                         + '/' + qualifiedBundles.size()
                         + ': "' + bundle.developerName + '"'
                         + ' | object=' + bundle.objectApiName
+                        + ' | maxCapacity='
+                        + (bundle.maxCapacity != null
+                            ? String.valueOf(bundle.maxCapacity)
+                            : 'null')
+                        + ' | ignoreCapacity=' + bundle.ignoreCapacity
+                        + ' | candidateLimit=' + bundle.candidateLimit
                         + (isDryRun ? ' | dryRun=true' : ''))
                     .category(Logger.Category.ENGINE)
                     .inClass(CLS).inMethod('execute')
@@ -373,17 +379,17 @@ public with sharing class RoutingEngine {
     /**
      * @description Processes a single ConfigBundle through the atomicity-aware pipeline:
      *
-     *              1. Allow_Multiple gate (1 SOQL — BEFORE candidate query to save SOQL)
+     *              1. Open Work Item Gate (1 SOQL — BEFORE candidate query to save SOQL)
      *              2. Bind → Build → Query candidates (0 + 0 + 1 SOQL)
      *              3. Agent capability VALUE match (0 SOQL — cached)
      *              4. Lock + Assign (1–N SOQL + 1–2 DML)
      *
      *              Atomicity notes:
-     *              • Allow_Multiple uses SOQL that sees dirty reads from prior bundle
-     *                DML within the same transaction. This is CORRECT — an agent who
-     *                was just assigned a Case in Bundle 1 should be blocked from
-     *                receiving another Case in Bundle 2 (if Allow_Multiple=false).
-     *              • Each config targets different objects, so Allow_Multiple is
+     *              • The Open Work Item Gate uses SOQL that sees dirty reads from
+     *                prior bundle DML within the same transaction. This is CORRECT —
+     *                an agent who was just assigned a Case in Bundle 1 must be
+     *                counted against capacity for Bundle 2 (if same object/config).
+     *              • Each config targets different objects, so the gate is
      *                inherently per-bundle (Cases vs Leads are independent).
      *              • CapabilityMismatchException is caught and converted to an
      *                audit-loggable outcome — the engine continues to the next bundle.
@@ -422,34 +428,50 @@ public with sharing class RoutingEngine {
                 return result;
             }
 
-            // ── Phase 3: Per-config capacity gate (1 SOQL) ───────────────
+            // ── Phase 3: Open Work Item Gate (0–1 SOQL) ──────────────────
             // DryRun still evaluates this gate to accurately simulate behavior.
             //
-            // Metadata-driven ceiling:
-            //   • Routing_Config__mdt.Max_Capacity__c  — per-config cap
-            //     (default 1 when null, resolved in ConfigBundle)
-            //   • Closed_Status_Field_API_Name__c + Closed_Status_Values__c
-            //     — excludes already-completed work so a closed record can
-            //       never block a new assignment (fixes latent bug where the
-            //       owner field on a closed Case/Opp never changes).
+            // Effective cap resolution (Ignore_Capacity is the master switch):
+            //   • Ignore_Capacity__c = true   → cap = unlimited (skip gate)
+            //                                   Use only for fire-and-forget
+            //                                   broadcast configs.
+            //   • Ignore_Capacity__c = false  → enforce Max_Capacity__c
+            //                                   (or 1 if Max_Capacity is null —
+            //                                    the conservative legacy default)
             //
-            // Skipped entirely when Allow_Multiple__c = true (unlimited).
-            if (!bundle.allowMultiple) {
-                Integer cap = bundle.maxCapacity; // guaranteed >= 1
+            // Closed_Status_Field_API_Name__c + Closed_Status_Values__c
+            // exclude already-completed work so a closed record can never
+            // block a new assignment (fixes latent bug where the owner
+            // field on a closed Case/Opp never changes).
+            Integer effectiveCap;
+            if (bundle.ignoreCapacity) {
+                effectiveCap = null; // unlimited — skip the gate
+            } else if (bundle.maxCapacity != null) {
+                effectiveCap = bundle.maxCapacity;
+            } else {
+                effectiveCap = 1;    // conservative legacy default
+            }
+
+            if (effectiveCap != null) {
                 List<SObject> existing = AssignmentSelector.queryOwnedRecords(
                     bundle.objectApiName,
                     bundle.ownerFieldApiName,
                     agentUserId,
                     bundle.closedStatusFieldApiName,
                     bundle.closedStatusValues,
-                    cap
+                    effectiveCap
                 );
-                if (existing.size() >= cap) {
+                if (existing.size() >= effectiveCap) {
                     Logger.info('Agent at per-config capacity'
                             + ' | config=' + bundle.developerName
                             + ' | agent=' + agentUserId
                             + ' | open=' + existing.size()
-                            + ' | cap=' + cap
+                            + ' | cap=' + effectiveCap
+                            + ' | maxCapacity='
+                            + (bundle.maxCapacity != null
+                                ? String.valueOf(bundle.maxCapacity)
+                                : 'null')
+                            + ' | ignoreCapacity=' + bundle.ignoreCapacity
                             + (isDryRun ? ' | dryRun=true' : ''))
                         .category(Logger.Category.ASSIGNMENT)
                         .inClass(CLS).inMethod('processBundle')
@@ -834,7 +856,7 @@ public with sharing class RoutingEngine {
      *              • Agent is not Offline
      *              • request.recordId is populated
      *
-     *              Skips: candidate query, AgentMatcher, Allow_Multiple gate.
+     *              Skips: candidate query, AgentMatcher, Open Work Item Gate.
      *              Still: creates audit entry, publishes Platform Event, increments load.
      *
      * @param request     The routing request with overrideAgentId populated

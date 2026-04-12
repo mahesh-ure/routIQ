@@ -14,7 +14,7 @@ v1.field = 'ure__Active__c'; v1.value = true;
 caseConfig.values.add(v1);
 
 Metadata.CustomMetadataValue v2 = new Metadata.CustomMetadataValue();
-v2.field = 'ure__Allow_Multiple__c'; v2.value = true;
+v2.field = 'ure__Ignore_Capacity__c'; v2.value = true;
 caseConfig.values.add(v2);
 
 Metadata.CustomMetadataValue v3 = new Metadata.CustomMetadataValue();
@@ -60,7 +60,7 @@ o1.field = 'ure__Active__c'; o1.value = true;
 oppConfig.values.add(o1);
 
 Metadata.CustomMetadataValue o2 = new Metadata.CustomMetadataValue();
-o2.field = 'ure__Allow_Multiple__c'; o2.value = false;
+o2.field = 'ure__Ignore_Capacity__c'; o2.value = false;
 oppConfig.values.add(o2);
 
 Metadata.CustomMetadataValue o3 = new Metadata.CustomMetadataValue();
