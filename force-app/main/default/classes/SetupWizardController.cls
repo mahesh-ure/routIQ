@@ -263,6 +263,105 @@ public with sharing class SetupWizardController {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 4 — User search (fresh-install support)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * @description Searches active Salesforce Users for the Step 4 agent picker.
+     *              Unlike getActiveAgents() — which only returns users with existing
+     *              Agent__c records — this method queries ALL active Users so the
+     *              wizard works on a fresh install (zero Agent__c records).
+     *
+     *              If a User already has an Agent__c record, agentId and capacity
+     *              are populated from it. Otherwise, agentId is null and defaults
+     *              are shown.
+     *
+     *              Search is optional: passing blank returns the first 200 active users.
+     *
+     * @param searchTerm Optional name filter (LIKE match). Blank = no filter.
+     * @return List of AgentInfo DTOs for matching active users
+     */
+    @AuraEnabled
+    public static List<AgentInfo> searchAvailableUsers(String searchTerm) {
+        // Query active users, optionally filtered by name
+        String soql;
+        Map<String, Object> binds = new Map<String, Object>();
+        binds.put('isActive', true);
+
+        if (String.isNotBlank(searchTerm) && searchTerm.trim().length() >= 2) {
+            soql = 'SELECT Id, Name, Email, ProfileId, Profile.Name, '
+                + 'ManagerId, Manager.Name '
+                + 'FROM User '
+                + 'WHERE IsActive = :isActive '
+                + 'AND Name LIKE :searchPattern '
+                + 'ORDER BY Name LIMIT 200';
+            binds.put('searchPattern', '%' + searchTerm.trim() + '%');
+        } else {
+            soql = 'SELECT Id, Name, Email, ProfileId, Profile.Name, '
+                + 'ManagerId, Manager.Name '
+                + 'FROM User '
+                + 'WHERE IsActive = :isActive '
+                + 'ORDER BY Name LIMIT 200';
+        }
+
+        List<SObject> users = Database.queryWithBinds(
+            soql, binds, AccessLevel.USER_MODE
+        );
+
+        if (users.isEmpty()) {
+            return new List<AgentInfo>();
+        }
+
+        // Collect user IDs to check for existing Agent__c records
+        Set<Id> userIds = new Set<Id>();
+        for (SObject u : users) {
+            userIds.add(u.Id);
+        }
+
+        // Query existing Agent__c records for these users
+        String agentSoql = 'SELECT Id, User__c, Max_Capacity__c, Current_Load__c '
+            + 'FROM Agent__c WHERE User__c IN :userIds AND Is_Active__c = :isActive';
+        Map<String, Object> agentBinds = new Map<String, Object>{
+            'userIds' => new List<Id>(userIds),
+            'isActive' => true
+        };
+
+        List<SObject> agentRecords = Database.queryWithBinds(
+            agentSoql, agentBinds, AccessLevel.USER_MODE
+        );
+
+        Map<Id, Agent__c> existingAgents = new Map<Id, Agent__c>();
+        for (SObject rec : agentRecords) {
+            Agent__c agent = (Agent__c) rec;
+            existingAgents.put(agent.User__c, agent);
+        }
+
+        // Build results — merge User + optional Agent__c data
+        List<AgentInfo> results = new List<AgentInfo>();
+        for (SObject sobj : users) {
+            User u = (User) sobj;
+            Agent__c existingAgent = existingAgents.get(u.Id);
+
+            AgentInfo ai = new AgentInfo();
+            ai.agentId = (existingAgent != null) ? existingAgent.Id : null;
+            ai.userId = u.Id;
+            ai.userName = u.Name;
+            ai.userEmail = u.Email;
+            ai.profileId = u.ProfileId;
+            ai.profileName = (u.Profile != null) ? u.Profile.Name : '';
+            ai.managerId = u.ManagerId;
+            ai.managerName = (u.Manager != null) ? u.Manager.Name : '';
+            ai.maxCapacity = (existingAgent != null && existingAgent.Max_Capacity__c != null)
+                ? existingAgent.Max_Capacity__c.intValue() : 0;
+            ai.currentLoad = (existingAgent != null && existingAgent.Current_Load__c != null)
+                ? existingAgent.Current_Load__c.intValue() : 0;
+            results.add(ai);
+        }
+
+        return results;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // STEP 5 — Simulate (dry run)
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -346,15 +445,14 @@ public with sharing class SetupWizardController {
 
     /**
      * @description Deploys the wizard configuration as Routing_Config__mdt and
-     *              Routing_Condition__mdt records via Metadata.Operations, and
-     *              creates Agent__c / Skill_Bundle__c / Skill_Bundle_Entry__c
-     *              records via standard DML.
+     *              Routing_Condition__mdt records via Metadata.Operations.
      *
      *              CMDT deploy is asynchronous — returns a deployment ID that the
      *              LWC polls via getDeployStatus().
      *
-     *              Agent and skill bundle records are DML (synchronous) and commit
-     *              immediately.
+     *              Agent__c records are created in SetupWizardDeployCallback AFTER
+     *              CMDT deployment succeeds, preserving atomicity. If CMDT fails,
+     *              no Agent__c records are created.
      *
      * @param wizardStateJson JSON-serialized wizard state from the parent LWC
      * @return DeployResult with the deployment ID for polling
@@ -397,10 +495,23 @@ public with sharing class SetupWizardController {
             }
         }
 
+        // ── Part 2: Prepare callback with agent data ─────────────────
+        // Agent DML is deferred to the callback so records are only created
+        // AFTER CMDT deployment succeeds — preserving atomicity.
+        String agentDataJson = null;
+        if (state.agents != null && !state.agents.isEmpty()) {
+            agentDataJson = JSON.serialize(state.agents);
+        }
+
+        SetupWizardDeployCallback callback = new SetupWizardDeployCallback(
+            state.configDevName,
+            agentDataJson,
+            state.maxCapacity
+        );
+
         // Enqueue deployment — asynchronous
         try {
-            Id deployId = Metadata.Operations.enqueueDeployment(container, null);
-            // Return configDevName as deploymentId for polling (avoids DeployRequest query issues)
+            Id deployId = Metadata.Operations.enqueueDeployment(container, callback);
             deployResult.deploymentId = state.configDevName;
             deployResult.success = true;
             deployResult.message = 'Configuration deployment started.';
@@ -408,22 +519,6 @@ public with sharing class SetupWizardController {
             throw new AuraHandledException(
                 'Failed to start deployment: ' + ex.getMessage()
             );
-        }
-
-        // ── Part 2: Create Agent DML records (synchronous) ───────────────
-        if (state.agents != null && !state.agents.isEmpty()) {
-            try {
-                createAgentRecords(state);
-            } catch (Exception ex) {
-                // CMDT deploy already started — log warning but don't fail
-                Logger.warn('Agent DML failed during wizard deploy | ' + ex.getMessage())
-                    .category(Logger.Category.CONFIG)
-                    .inClass(CLS).inMethod('deployConfig')
-                    .withException(ex)
-                    .log();
-                deployResult.agentWarning = 'Agent records could not be created: '
-                    + ex.getMessage();
-            }
         }
 
         return deployResult;
@@ -452,8 +547,26 @@ public with sharing class SetupWizardController {
         DeployStatusResult status = new DeployStatusResult();
 
         try {
-            // deploymentId is actually the config developer name (from deployConfig result)
-            // Query Routing_Config__mdt to verify the deployment created the CMDT
+            // ── Tier 1: Check Platform Cache for callback result ────────
+            // The DeployCallback stores success/failure here immediately
+            // after the async deployment completes — gives us real error messages.
+            SetupWizardDeployCallback.DeployOutcome cachedResult =
+                SetupWizardDeployCallback.getStoredResult(deploymentId);
+
+            if (cachedResult != null) {
+                status.done = true;
+                status.success = cachedResult.success;
+                status.status = cachedResult.status;
+                status.errorMessage = cachedResult.errorMessage;
+
+                // Clean up cache entry after retrieval
+                SetupWizardDeployCallback.clearStoredResult(deploymentId);
+                return status;
+            }
+
+            // ── Tier 2: Query CMDT record as fallback ───────────────────
+            // Handles case where Platform Cache is unavailable or partition
+            // is not configured (callback stored nothing).
             String soql = 'SELECT Id, DeveloperName FROM Routing_Config__mdt '
                 + 'WHERE DeveloperName = :devName LIMIT 1';
             Map<String, Object> binds = new Map<String, Object>{
@@ -465,15 +578,13 @@ public with sharing class SetupWizardController {
             );
 
             if (!results.isEmpty()) {
-                // CMDT found — deployment succeeded
                 status.done = true;
                 status.success = true;
                 status.status = 'Succeeded';
                 return status;
             }
 
-            // CMDT not found — still deploying or failed
-            // Return pending status; LWC will continue polling
+            // Neither callback result nor CMDT found — still deploying
             status.done = false;
             status.success = false;
             status.status = 'InProgress';
@@ -595,7 +706,7 @@ public with sharing class SetupWizardController {
     private static Metadata.CustomMetadata buildConfigMetadata(WizardState state) {
         Metadata.CustomMetadata cm = new Metadata.CustomMetadata();
         cm.fullName = 'Routing_Config__mdt.' + state.configDevName;
-        cm.label = state.configLabel;
+        cm.label = truncateLabel(state.configLabel);
 
         addMetadataValue(cm, 'Object_API_Name__c', state.objectApiName);
         addMetadataValue(cm, 'Owner_Field_API_Name__c', state.ownerFieldApiName);
@@ -649,7 +760,7 @@ public with sharing class SetupWizardController {
 
         Metadata.CustomMetadata cm = new Metadata.CustomMetadata();
         cm.fullName = 'Routing_Condition__mdt.' + conditionDevName;
-        cm.label = state.configLabel + ' - ' + condition.fieldApiName;
+        cm.label = truncateLabel(state.configLabel + ' - ' + condition.fieldApiName);
 
         addMetadataValue(cm, 'Field_API_Name__c', condition.fieldApiName);
         addMetadataValue(cm, 'Operator__c', condition.operator);
@@ -662,8 +773,11 @@ public with sharing class SetupWizardController {
         }
 
         // Set the parent relationship to Routing_Config__mdt
-        addMetadataValue(cm, 'Routing_Config__c',
-            'Routing_Config__mdt.' + state.configDevName);
+        // MetadataRelationship value = DeveloperName only — the platform
+        // auto-resolves the entity prefix (Routing_Config.<DeveloperName>).
+        // Passing 'Routing_Config__mdt.X' caused: "no CustomMetadata named
+        // Routing_Config.Routing_Config__mdt.X found" (double-prefixed).
+        addMetadataValue(cm, 'Routing_Config__c', state.configDevName);
 
         return cm;
     }
@@ -682,56 +796,18 @@ public with sharing class SetupWizardController {
         cm.values.add(fieldValue);
     }
 
+    // Agent DML has been moved to SetupWizardDeployCallback.createAgentRecords()
+    // to ensure atomicity: Agent__c records are only created after CMDT
+    // deployment succeeds in the async callback.
+
     /**
-     * @description Creates Agent__c records for users specified in the wizard.
-     *              Checks for existing Agent__c records to avoid duplicates.
-     *              Uses AccessLevel.USER_MODE for CRUD/FLS enforcement.
+     * @description Truncates a CMDT label to the platform maximum of 40 characters.
+     *              Prevents async deployment failures caused by oversized labels
+     *              (e.g. condition label = configLabel + ' - ' + fieldApiName).
      */
-    private static void createAgentRecords(WizardState state) {
-        // Collect user IDs from wizard agents
-        Set<Id> userIds = new Set<Id>();
-        for (WizardAgent agent : state.agents) {
-            if (agent.userId != null) {
-                userIds.add(agent.userId);
-            }
-        }
-
-        if (userIds.isEmpty()) {
-            return;
-        }
-
-        // Check for existing agents to avoid duplicates
-        String soql = 'SELECT Id, User__c FROM Agent__c WHERE User__c IN :userIds';
-        Map<String, Object> binds = new Map<String, Object>{
-            'userIds' => new List<Id>(userIds)
-        };
-
-        List<SObject> existingRecords = Database.queryWithBinds(
-            soql, binds, AccessLevel.USER_MODE
-        );
-
-        Set<Id> existingUserIds = new Set<Id>();
-        for (SObject rec : existingRecords) {
-            existingUserIds.add((Id) rec.get('User__c'));
-        }
-
-        // Create new Agent__c records only for users without existing records
-        List<Agent__c> newAgents = new List<Agent__c>();
-        for (WizardAgent agent : state.agents) {
-            if (agent.userId != null && !existingUserIds.contains(agent.userId)) {
-                Agent__c newAgent = new Agent__c();
-                newAgent.User__c = agent.userId;
-                newAgent.Is_Active__c = true;
-                newAgent.Max_Capacity__c = (state.maxCapacity != null)
-                    ? state.maxCapacity : 5;
-                newAgent.Current_Load__c = 0;
-                newAgents.add(newAgent);
-            }
-        }
-
-        if (!newAgents.isEmpty()) {
-            Database.insert(newAgents, true, AccessLevel.USER_MODE);
-        }
+    private static String truncateLabel(String label) {
+        if (label == null) { return ''; }
+        return (label.length() > 40) ? label.substring(0, 40) : label;
     }
 
     /**

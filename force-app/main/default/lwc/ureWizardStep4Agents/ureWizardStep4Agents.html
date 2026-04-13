@@ -4,9 +4,20 @@
         <!-- ── Instructions ──────────────────────────────────── -->
         <p class="slds-text-body_regular slds-m-bottom_medium">{label.selectAgents}</p>
 
+        <!-- ── User Search ──────────────────────────────────── -->
+        <div class="slds-m-bottom_medium">
+            <lightning-input
+                type="search"
+                label={label.searchUsers}
+                value={searchTerm}
+                onchange={handleSearchChange}
+                placeholder="Search by name...">
+            </lightning-input>
+        </div>
+
         <!-- ── Filter Options ────────────────────────────────── -->
         <div class="slds-box slds-box_x-small slds-theme_shade slds-m-bottom_medium">
-            <p class="slds-text-title_caps slds-m-bottom_small">Filter Agents (Optional)</p>
+            <p class="slds-text-title_caps slds-m-bottom_small">Filter (Optional)</p>
             <div class="slds-grid slds-gutters slds-wrap">
                 <div class="slds-col slds-size_1-of-2">
                     <lightning-combobox
@@ -46,7 +57,7 @@
         <!-- ── Loading ───────────────────────────────────────── -->
         <template lwc:if={isLoading}>
             <lightning-spinner
-                alternative-text="Loading agents"
+                alternative-text="Loading users"
                 size="small">
             </lightning-spinner>
         </template>
@@ -56,7 +67,7 @@
             <div class="slds-text-color_error slds-m-bottom_small">{error}</div>
         </template>
 
-        <!-- ── Agent List ────────────────────────────────────── -->
+        <!-- ── User List ────────────────────────────────────── -->
         <template lwc:if={hasAgents}>
             <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
                 <p class="slds-text-body_small slds-text-color_weak">{selectionSummary}</p>
@@ -80,9 +91,10 @@
                     <thead>
                         <tr class="slds-line-height_reset">
                             <th scope="col" style="width: 3rem;"></th>
-                            <th scope="col">Agent Name</th>
+                            <th scope="col">Name</th>
                             <th scope="col">Email</th>
-                            <th scope="col">Capacity</th>
+                            <th scope="col">Profile</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -95,11 +107,12 @@
                                         data-userid={agent.userId}
                                         onchange={handleAgentToggle}
                                         variant="label-hidden"
-                                        label="Select agent">
+                                        label="Select user">
                                     </lightning-input>
                                 </td>
                                 <td>{agent.userName}</td>
                                 <td>{agent.userEmail}</td>
+                                <td>{agent.profileName}</td>
                                 <td>{agent.capacityDisplay}</td>
                             </tr>
                         </template>
@@ -108,7 +121,7 @@
             </div>
         </template>
 
-        <!-- ── No Agents ─────────────────────────────────────── -->
+        <!-- ── No Users ─────────────────────────────────────── -->
         <template lwc:if={hasAgents}>
         </template>
         <template lwc:else>

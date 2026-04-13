@@ -298,15 +298,23 @@
         <language>en_US</language>
         <protected>true</protected>
         <shortDescription>Agent selection instruction</shortDescription>
-        <value>Select agents who will receive routed records. Skill badges are derived from your conditions in Step 3.</value>
+        <value>Select users who will act as routing agents. Skill badges are derived from your conditions in Step 3.</value>
     </labels>
 
     <labels>
         <fullName>URE_WizardNoAgents</fullName>
         <language>en_US</language>
         <protected>true</protected>
-        <shortDescription>No agents available message</shortDescription>
-        <value>No active agents found. Create Agent records before assigning routing.</value>
+        <shortDescription>No users found message</shortDescription>
+        <value>No active users found matching your search. Try a different search term or clear filters.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSearchUsers</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>User search input label</shortDescription>
+        <value>Search Users</value>
     </labels>
 
     <!-- ── Setup Wizard: Step 5 ───────────────────────────────────────── -->

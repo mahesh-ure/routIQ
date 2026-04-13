@@ -163,6 +163,81 @@ private class SetupWizardController_Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // searchAvailableUsers
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @IsTest
+    static void searchAvailableUsers_noSearchTerm_returnsUsers() {
+        Test.startTest();
+        List<SetupWizardController.AgentInfo> users =
+            SetupWizardController.searchAvailableUsers('');
+        Test.stopTest();
+
+        // At minimum, the running test user should be returned
+        System.assertNotEquals(0, users.size(),
+            'Should return at least one active user');
+
+        // Verify DTO fields are populated
+        SetupWizardController.AgentInfo first = users[0];
+        System.assertNotEquals(null, first.userId,
+            'userId should not be null');
+        System.assertNotEquals(null, first.userName,
+            'userName should not be null');
+    }
+
+    @IsTest
+    static void searchAvailableUsers_withSearchTerm_filtersResults() {
+        // Get current user name for a guaranteed match
+        String currentUserName = UserInfo.getName();
+        // Use first 3 characters as search term
+        String searchTerm = currentUserName.substring(0, Math.min(3, currentUserName.length()));
+
+        Test.startTest();
+        List<SetupWizardController.AgentInfo> users =
+            SetupWizardController.searchAvailableUsers(searchTerm);
+        Test.stopTest();
+
+        // Should return at least the current user
+        System.assertNotEquals(0, users.size(),
+            'Should return matching users');
+    }
+
+    @IsTest
+    static void searchAvailableUsers_withExistingAgent_showsAgentData() {
+        Id userId = UserInfo.getUserId();
+
+        // Create an Agent__c for the current user
+        Agent__c agent = new Agent__c(
+            User__c = userId,
+            Is_Active__c = true,
+            Max_Capacity__c = 10,
+            Current_Load__c = 3
+        );
+        insert agent;
+
+        Test.startTest();
+        List<SetupWizardController.AgentInfo> users =
+            SetupWizardController.searchAvailableUsers('');
+        Test.stopTest();
+
+        // Find the current user in results
+        SetupWizardController.AgentInfo currentUser = null;
+        for (SetupWizardController.AgentInfo ai : users) {
+            if (ai.userId == userId) {
+                currentUser = ai;
+                break;
+            }
+        }
+
+        System.assertNotEquals(null, currentUser,
+            'Current user should appear in results');
+        System.assertNotEquals(null, currentUser.agentId,
+            'agentId should be populated for users with Agent__c records');
+        System.assertEquals(10, currentUser.maxCapacity,
+            'maxCapacity should come from the Agent__c record');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // simulateRouting
     // ═══════════════════════════════════════════════════════════════════════════
 
