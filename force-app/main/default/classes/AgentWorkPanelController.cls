@@ -1,95 +1,16 @@
 /**
- * @description Layer 5 -- AuraEnabled controller for the Agent Work Panel LWC
- *              (ureAgentWorkPanel). Provides the five server endpoints the
- *              panel needs to load, refresh, route, defer, and gauge queue
- *              depth — split intentionally between cacheable (read-only,
- *              @wire-eligible) and non-cacheable (DML / mutation) methods so
- *              the LWC can use Lightning Data Service caching where it is
- *              safe and imperative calls where it is required.
- *
- *              Endpoints:
- *
- *              1. getAgentContext()      -- (cacheable) Initial wire load.
- *                                           Returns the running user's
- *                                           Agent__c state (status, load,
- *                                           capacity, last assigned).
- *
- *              2. refreshAgentContext()  -- (non-cacheable) The 10-second
- *                                           auto-refresh tick the panel
- *                                           fires from the client. Runs
- *                                           WorkItemReaper.reapForCurrentUser()
- *                                           server-side so the Current Load
- *                                           gauge drops as soon as the agent
- *                                           closes / deletes an assigned
- *                                           record, then returns the fresh
- *                                           AgentContext. Non-cacheable
- *                                           because it does DML — that is
- *                                           why it cannot be merged into
- *                                           getAgentContext.
- *
- *              3. getNextWork()          -- (non-cacheable) Pull-model entry
- *                                           point for the Next Best Action
- *                                           button. Delegates to
- *                                           RoutingService and enriches the
- *                                           result with the SLA deadline so
- *                                           the LWC's client-side countdown
- *                                           timer has its anchor.
- *
- *              4. deferWork()            -- (non-cacheable) Resets the
- *                                           configured defer field on the
- *                                           assigned record, removes the
- *                                           Agent_Work_Item__c so
- *                                           Current_Load__c drops, and
- *                                           publishes a DEFERRED Routing
- *                                           Platform Event for downstream
- *                                           subscribers.
- *
- *              5. getQueueDepth()        -- (cacheable) Lightweight COUNT()
- *                                           that powers the panel's Queue
- *                                           metric via @wire. Two modes:
- *                                           a) configDevName provided →
- *                                              count for that one config.
- *                                           b) configDevName blank/null →
- *                                              SUM across every active
- *                                              config (out-of-the-box
- *                                              fallback so the widget works
- *                                              before the admin binds the
- *                                              panel to a specific config).
- *
- *              Security:
- *              - Agent resolved server-side from UserInfo.getUserId() -- no
- *                client-supplied agent ID that could be spoofed.
- *              - USER_MODE DML/SOQL enforces CRUD/FLS throughout.
- *              - Bind variables only -- zero SOQL injection surface.
- *
- *              Governor cost per method:
- *              - getAgentContext:     1 SOQL
- *              - refreshAgentContext: 1 SOQL (agent) + reaper budget
- *                                     (typically 1 SOQL per distinct config
- *                                     in active work items, + at most 1 DML
- *                                     when zombies exist)
- *              - getNextWork:         delegates to RoutingEngine (see
- *                                     RoutingEngine budget) + reaper pre-pull
- *              - deferWork:           1 SOQL (config) + 1 SOQL (record) +
- *                                     1 DML (record update) + 1 DML (work
- *                                     item delete) + 1 DML (Platform Event)
- *              - getQueueDepth:       1 COUNT() per active config
- *                                     (typically ≤ 5 — well within limits)
- *
+ * @description Layer 5 -- AuraEnabled controller for the Agent Work Panel LWC.
+ *   Endpoints: getAgentContext (cacheable), refreshAgentContext (reap + reload),
+ *   getNextWork (pull-model routing), deferWork (reset field + event), getQueueDepth (COUNT).
+ *   Security: agent resolved server-side via UserInfo; USER_MODE SOQL/DML; bind vars only.
+ *   Governor: 1-5 SOQL per call depending on endpoint; see individual methods.
  * @group Entry
  */
 public with sharing class AgentWorkPanelController {
 
     private static final String CLS = 'AgentWorkPanelController';
 
-    // =========================================================================
-    // INNER CLASS -- Agent context DTO returned to LWC
-    // =========================================================================
-
-    /**
-     * @description Lightweight DTO carrying the agent's current state to the LWC.
-     *              Avoids exposing the full Agent__c SObject to the client.
-     */
+    /** @description Lightweight DTO carrying the agent's current state to the LWC. */
     public class AgentContext {
         @AuraEnabled public Id agentId;
         @AuraEnabled public String status;
@@ -99,15 +20,7 @@ public with sharing class AgentWorkPanelController {
         @AuraEnabled public Datetime lastAssigned;
     }
 
-    // =========================================================================
-    // INNER CLASS -- Work assignment DTO returned by getNextWork
-    // =========================================================================
-
-    /**
-     * @description Enriched routing result that adds SLA deadline data for the
-     *              client-side countdown timer. Wraps RoutingResult fields plus
-     *              the SLA DateTime value read from the assigned record.
-     */
+    /** @description Enriched routing result with SLA deadline for client-side countdown timer. */
     public class WorkAssignment {
         @AuraEnabled public Boolean success;
         @AuraEnabled public Id recordId;
@@ -120,23 +33,9 @@ public with sharing class AgentWorkPanelController {
         @AuraEnabled public String configDevName;
     }
 
-    // =========================================================================
-    // 1. getAgentContext -- load current user's Agent__c record
-    // =========================================================================
-
     /**
-     * @description Returns the Agent__c record for the running user. Resolved
-     *              server-side via UserInfo.getUserId() -- never trusts a
-     *              client-supplied agent Id.
-     *
-     *              Governor: 1 SOQL (USER_MODE).
-     *
-     *              cacheable=true → safe for @wire and Lightning Data Service
-     *              caching. NEVER add DML here; use refreshAgentContext()
-     *              for the auto-refresh tick which needs to reap zombies.
-     *
-     * @return AgentContext DTO with status, load, capacity, active flag
-     * @throws AuraHandledException when no Agent__c record exists for the user
+     * @description Returns AgentContext for the running user. Cacheable -- no DML.
+     * @return AgentContext DTO   @throws AuraHandledException if no Agent__c exists
      */
     @AuraEnabled(cacheable=true)
     public static AgentContext getAgentContext() {
@@ -144,30 +43,8 @@ public with sharing class AgentWorkPanelController {
     }
 
     /**
-     * @description Non-cacheable companion to getAgentContext() used by the
-     *              Agent Work Panel's 10-second auto-refresh tick. Performs
-     *              two operations:
-     *
-     *              1. WorkItemReaper.reapForCurrentUser() — completes any
-     *                 Agent_Work_Item__c rows whose source record has been
-     *                 closed or deleted by the agent since the last tick.
-     *                 This synchronises Agent__c.Current_Load__c with reality
-     *                 BEFORE the LWC reads it, so the load gauge drops as
-     *                 soon as the agent closes a Case/Opportunity/etc.
-     *
-     *              2. Returns the freshly-loaded AgentContext.
-     *
-     *              The reap is wrapped in a try/catch — a reap failure must
-     *              never break the auto-refresh. The agent context still
-     *              returns even if cleanup hiccups.
-     *
-     *              Governor (typical): 1 SOQL (reaper agent lookup) +
-     *              1 SOQL per distinct config in active work items + 1 DML
-     *              (work item completion, only if zombies exist) +
-     *              1 SOQL (agent context). Cheap enough for every 10s.
-     *
+     * @description Non-cacheable 10s auto-refresh: reaps zombie work items then returns fresh context.
      * @return AgentContext DTO reflecting load AFTER zombie cleanup
-     * @throws AuraHandledException when no Agent__c record exists for the user
      */
     @AuraEnabled
     public static AgentContext refreshAgentContext() {
@@ -188,14 +65,8 @@ public with sharing class AgentWorkPanelController {
     }
 
     /**
-     * @description Shared loader used by both getAgentContext() (cacheable
-     *              wire) and refreshAgentContext() (auto-refresh tick).
-     *              Centralised so the field list and DTO mapping live in
-     *              exactly one place — the two endpoints can never drift.
-     *
-     *              Cost: 1 SOQL.
-     *
-     * @return AgentContext DTO for the running user's Agent__c
+     * @description Shared Agent__c loader for getAgentContext and refreshAgentContext.
+     *              Single source of truth for field list and DTO mapping. Cost: 1 SOQL.
      */
     private static AgentContext loadAgentContext() {
         Id userId = UserInfo.getUserId();
@@ -215,10 +86,7 @@ public with sharing class AgentWorkPanelController {
         ];
 
         if (agents.isEmpty()) {
-            throw new AuraHandledException(
-                'No active Agent record found for the current user. '
-                + 'Contact your administrator to create an Agent record.'
-            );
+            throw new AuraHandledException(System.Label.URE_PANEL_NO_AGENT_ERROR);
         }
 
         Agent__c agent = agents[0];
@@ -295,45 +163,32 @@ public with sharing class AgentWorkPanelController {
     // =========================================================================
 
     /**
-     * @description Defers the currently assigned work item. Resets the field
-     *              specified by Routing_Config__mdt.Defer_Reset_Field__c to the
-     *              value in Defer_Reset_Value__c, then publishes a DEFERRED
-     *              Platform Event.
-     *
-     *              If no defer fields are configured, throws an error -- admins
-     *              must configure defer behavior per routing config.
-     *
-     * @param recordId      The record to defer (must be a valid SObject Id)
-     * @param configDevName Developer name of the Routing_Config__mdt that
-     *                      assigned this record (required for defer field lookup)
-     * @return String 'OK' on success
-     * @throws AuraHandledException on validation failure or DML error
+     * @description Defers work by resetting the defer field from config, removing the
+     *              work item, and publishing a DEFERRED Platform Event. Requires defer
+     *              fields to be configured on the Routing_Config__mdt.
      */
     @AuraEnabled
     public static String deferWork(Id recordId, String configDevName) {
-        // ── Validate inputs ────────────────────────────────────────────
+        // Validate inputs
         if (recordId == null) {
-            throw new AuraHandledException('Record Id is required to defer work.');
+            throw new AuraHandledException(System.Label.URE_PANEL_RECORD_ID_REQUIRED);
         }
         if (String.isBlank(configDevName)) {
-            throw new AuraHandledException(
-                'Config developer name is required to determine defer behavior.'
-            );
+            throw new AuraHandledException(System.Label.URE_PANEL_CONFIG_REQUIRED_DEFER);
         }
 
-        // ── Load config for defer field metadata ───────────────────────
+        // Load config for defer field metadata
         Map<String, Routing_Config__mdt> allConfigs = RoutingConfigSelector.getAllConfigs();
         Routing_Config__mdt config = allConfigs.get(configDevName);
 
         if (config == null) {
             throw new AuraHandledException(
-                'Routing config "' + configDevName + '" not found.'
+                String.format(System.Label.URE_PANEL_CONFIG_NOT_FOUND, new List<Object>{configDevName})
             );
         }
         if (String.isBlank(config.Defer_Reset_Field__c)) {
             throw new AuraHandledException(
-                'Defer is not configured for routing config "' + configDevName + '". '
-                + 'Set Defer_Reset_Field__c and Defer_Reset_Value__c on the config.'
+                String.format(System.Label.URE_PANEL_DEFER_NOT_CONFIGURED, new List<Object>{configDevName})
             );
         }
 
@@ -341,28 +196,27 @@ public with sharing class AgentWorkPanelController {
         String deferValue = config.Defer_Reset_Value__c;
         String objectApiName = config.Object_API_Name__c;
 
-        // ── Validate field accessibility via describe ──────────────────
+        // Validate field accessibility via describe
         Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
         if (sot == null) {
             throw new AuraHandledException(
-                'Object "' + objectApiName + '" does not exist in this org.'
+                String.format(System.Label.URE_PANEL_OBJECT_NOT_FOUND, new List<Object>{objectApiName})
             );
         }
         Schema.DescribeFieldResult dfr = sot.getDescribe()
             .fields.getMap().get(deferField)?.getDescribe();
         if (dfr == null) {
             throw new AuraHandledException(
-                'Defer field "' + deferField + '" does not exist on ' + objectApiName + '.'
+                String.format(System.Label.URE_PANEL_FIELD_NOT_FOUND, new List<Object>{deferField, objectApiName})
             );
         }
         if (!dfr.isUpdateable()) {
             throw new AuraHandledException(
-                'Current user lacks update access on '
-                + objectApiName + '.' + deferField + '.'
+                String.format(System.Label.URE_PANEL_NO_UPDATE_ACCESS, new List<Object>{objectApiName, deferField})
             );
         }
 
-        // ── Build and update the record ────────────────────────────────
+        // Build and update the record
         SObject record = sot.newSObject(recordId);
         record.put(deferField, castDeferValue(deferValue, dfr.getType()));
 
@@ -375,50 +229,28 @@ public with sharing class AgentWorkPanelController {
             for (Database.Error err : sr.getErrors()) {
                 errors += err.getMessage() + '; ';
             }
-            throw new AuraHandledException('Defer failed: ' + errors);
+            throw new AuraHandledException(
+                String.format(System.Label.URE_PANEL_DEFER_FAILED, new List<Object>{errors})
+            );
         }
 
-        // ── Remove work item and sync agent load ───────────────────────
+        // Remove work item and sync agent load
         WorkItemService.deferWorkItem(String.valueOf(recordId));
 
-        // ── Publish DEFERRED Platform Event ────────────────────────────
+        // Publish DEFERRED Platform Event
         publishDeferredEvent(recordId, objectApiName, configDevName);
 
         return 'OK';
     }
 
-    // =========================================================================
-    // 4. getQueueDepth -- lightweight COUNT() of pending candidates
-    // =========================================================================
-
     /**
-     * @description Returns the count of unassigned candidate records matching
-     *              the given routing config. Uses a lightweight COUNT() SOQL
-     *              with USER_MODE for FLS enforcement.
-     *
-     *              FALLBACK BEHAVIOUR (added with @wire conversion of the LWC):
-     *              When configDevName is null/blank, returns the SUM of pending
-     *              candidates across ALL active routing configs. This makes the
-     *              Agent Work Panel widget functional out-of-the-box on a fresh
-     *              install where the admin has not yet bound the panel to a
-     *              specific config via App Builder.
-     *
-     *              Per-config errors (missing object, missing FLS) are caught
-     *              and skipped in the all-configs path — the widget is
-     *              informational and must never crash the panel just because
-     *              one config is misconfigured. A named-config call still
-     *              throws on lookup failure (admin asked for a specific config
-     *              and deserves a hard error).
-     *
-     *              Governor: 1 SOQL per active config (typically ≤ 5).
-     *
-     * @param configDevName Developer name of the Routing_Config__mdt, or
-     *                      null/blank to sum across all active configs
-     * @return Integer count of pending records in the queue
+     * @description Returns COUNT of pending candidates for a config. When configDevName is blank,
+     *              sums across ALL active configs (out-of-the-box fallback). Per-config errors
+     *              are caught in fallback path so one bad config won't crash the panel.
      */
     @AuraEnabled(cacheable=true)
     public static Integer getQueueDepth(String configDevName) {
-        // ── Fallback path: no config locked → sum across all active configs ──
+        // Fallback: sum across all active configs
         if (String.isBlank(configDevName)) {
             Integer total = 0;
             for (Routing_Config__mdt cfg : RoutingConfigSelector.getAllConfigs().values()) {
@@ -439,13 +271,13 @@ public with sharing class AgentWorkPanelController {
             return total;
         }
 
-        // ── Named-config path: hard error on lookup failure ──
+        // Named-config path: hard error on lookup failure
         Map<String, Routing_Config__mdt> allConfigs = RoutingConfigSelector.getAllConfigs();
         Routing_Config__mdt config = allConfigs.get(configDevName);
 
         if (config == null) {
             throw new AuraHandledException(
-                'Routing config "' + configDevName + '" not found.'
+                String.format(System.Label.URE_PANEL_CONFIG_NOT_FOUND, new List<Object>{configDevName})
             );
         }
 
@@ -453,20 +285,8 @@ public with sharing class AgentWorkPanelController {
     }
 
     /**
-     * @description Counts pending candidate records for a single Routing_Config__mdt.
-     *              Extracted from getQueueDepth so the same logic powers both the
-     *              named-config path and the all-active-configs fallback.
-     *
-     *              Filters applied:
-     *              - Object from config.Object_API_Name__c
-     *              - Closed statuses excluded (config.Closed_Status_Values__c)
-     *              - Record type filter (config.Record_Type_Dev_Name__c)
-     *
-     *              Throws if the object referenced by the config does not exist
-     *              in the org. Caller is responsible for catching in the
-     *              fallback path.
-     *
-     *              Governor: 1 SOQL (USER_MODE COUNT()).
+     * @description Counts pending candidates for a single config. Filters by closed status
+     *              and record type. Throws if object not in schema. 1 SOQL (USER_MODE COUNT).
      */
     private static Integer countCandidatesForConfig(Routing_Config__mdt config) {
         String objectApiName = config.Object_API_Name__c;
@@ -474,7 +294,7 @@ public with sharing class AgentWorkPanelController {
         Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
         if (sot == null) {
             throw new AuraHandledException(
-                'Object "' + objectApiName + '" not found in schema.'
+                String.format(System.Label.URE_PANEL_OBJECT_SCHEMA_ERROR, new List<Object>{objectApiName})
             );
         }
 
@@ -517,14 +337,7 @@ public with sharing class AgentWorkPanelController {
         return Database.countQueryWithBinds(soql, bindMap, AccessLevel.USER_MODE);
     }
 
-    // =========================================================================
-    // PRIVATE HELPERS
-    // =========================================================================
-
-    /**
-     * @description Loads the SLA deadline DateTime value from the assigned record.
-     *              Returns null if no SLA field is configured or the field has no value.
-     */
+    /** @description Loads SLA deadline from the assigned record. Returns null if not configured. */
     private static Datetime loadSlaDeadline(
         Id recordId,
         String objectApiName,

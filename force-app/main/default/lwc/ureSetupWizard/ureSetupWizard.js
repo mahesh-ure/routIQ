@@ -36,6 +36,8 @@ import LABEL_STEP3 from '@salesforce/label/c.URE_WizardStep3Title';
 import LABEL_STEP4 from '@salesforce/label/c.URE_WizardStep4Title';
 import LABEL_STEP5 from '@salesforce/label/c.URE_WizardStep5Title';
 import LABEL_STEP_OF from '@salesforce/label/c.URE_WizardStepOf';
+import LABEL_CONFIG_ACTIVATED from '@salesforce/label/c.URE_WizardConfigActivated';
+import LABEL_REQUIRED_FIELDS from '@salesforce/label/c.URE_WizardRequiredFields';
 
 const TOTAL_STEPS = 5;
 
@@ -224,7 +226,7 @@ export default class UreSetupWizard extends LightningElement {
         if (detail.success) {
             this.dispatchEvent(new ShowToastEvent({
                 title: LABEL_TITLE,
-                message: detail.message || 'Configuration activated.',
+                message: detail.message || LABEL_CONFIG_ACTIVATED,
                 variant: 'success'
             }));
         }
@@ -248,7 +250,7 @@ export default class UreSetupWizard extends LightningElement {
             if (!isValid) {
                 this.dispatchEvent(new ShowToastEvent({
                     title: this.currentStepTitle,
-                    message: 'Please complete all required fields before proceeding.',
+                    message: LABEL_REQUIRED_FIELDS,
                     variant: 'warning'
                 }));
             }

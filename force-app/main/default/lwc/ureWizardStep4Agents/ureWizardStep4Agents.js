@@ -17,6 +17,7 @@ import searchAvailableUsers from '@salesforce/apex/SetupWizardController.searchA
 import LABEL_SELECT_AGENTS from '@salesforce/label/c.URE_WizardSelectAgents';
 import LABEL_NO_AGENTS from '@salesforce/label/c.URE_WizardNoAgents';
 import LABEL_SEARCH_USERS from '@salesforce/label/c.URE_WizardSearchUsers';
+import LABEL_LOAD_USERS_FAILED from '@salesforce/label/c.URE_WizardLoadUsersFailed';
 
 const SEARCH_DELAY_MS = 300;
 
@@ -77,7 +78,7 @@ export default class UreWizardStep4Agents extends LightningElement {
             this.agents = this.allAgents;
             this.buildFilterOptions();
         } catch (err) {
-            this.error = err.body?.message || 'Failed to load users.';
+            this.error = err.body?.message || LABEL_LOAD_USERS_FAILED;
             this.allAgents = [];
             this.agents = [];
         } finally {

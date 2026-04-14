@@ -1,52 +1,23 @@
 /**
- * @description Evaluates whether an agent is eligible to receive a work record by matching
- *              the record's field values against the agent's skill values resolved via
- *              the Skill Bundle pattern.
- *
- *              Design: Binary match — agent either qualifies or doesn't. No scoring.
- *              All mandatory Routing_Skill_Mapping__mdt entries must match for the agent
- *              to be eligible. If NO agent matches all mandatory skills, a
- *              CapabilityMismatchException is thrown with details for admin remediation.
- *
- *              Agent eligibility pipeline:
- *              1. Capacity check — Current_Load__c < Max_Capacity__c
- *              2. Mandatory capability match — every mandatory condition must be satisfied
- *
- *              Data flow:
- *              RoutingEngine passes the candidate SObject (work record) and the
- *              Routing_Skill_Mapping__mdt list from ConfigLoader. AgentMatcher reads
- *              the record's field values, loads agent capabilities from
- *              AgentCapabilitySelector, and returns the qualified Agent__c record.
- *
- *              Cost: 0 SOQL (all data pre-loaded by AgentCapabilitySelector's
- *                    transaction cache). Pure in-memory evaluation.
- *
+ * @description Binary agent matcher: agent either qualifies or doesn't (no scoring).
+ *              All mandatory Routing_Skill_Mapping__mdt entries must match.
+ *              Data flow: RoutingEngine passes work record + skill mappings from ConfigLoader.
+ *              Cost: 0 SOQL — pure in-memory evaluation via AgentCapabilitySelector cache.
  * @group Worker
  */
 public with sharing class AgentMatcher {
 
     private static final String CLS = 'AgentMatcher';
 
-    // ─── Inner Value Object ─────────────────────────────────────────────────
-
-    /**
-     * @description Result of agent matching for a single work record.
-     */
+    /** @description Result of agent matching for a single work record. */
     public class MatchResult {
         /** The qualified agent, or null if no match. */
         public Agent__c agent            { get; private set; }
-
         /** True if a qualified agent was found. */
         public Boolean matched           { get; private set; }
-
         /** Details of mandatory mismatches (for exception/audit). */
         public Map<String, String> missingCapabilities { get; private set; }
-
-        /**
-         * Layer 4: Skill match traces — one per evaluated Routing_Skill_Mapping__mdt.
-         * traceSource='SKILL_MATCH'. Consumed by RoutingEngine to append to
-         * the overall conditionTraces list on RoutingResult.
-         */
+        /** Layer 4 skill match traces — consumed by RoutingEngine for RoutingResult. */
         public List<RoutingConditionTrace> skillTraces { get; private set; }
 
         @TestVisible
@@ -55,8 +26,6 @@ public with sharing class AgentMatcher {
             this.skillTraces = new List<RoutingConditionTrace>();
         }
     }
-
-    // ─── MatchResult Factories ──────────────────────────────────────────────
 
     private static MatchResult resultMatched(Agent__c agent) {
         MatchResult r = new MatchResult();
@@ -72,21 +41,9 @@ public with sharing class AgentMatcher {
         return r;
     }
 
-    // ─── Public API ─────────────────────────────────────────────────────────
-
     /**
      * @description Evaluates the requesting agent against the work record's capability
-     *              requirements. Uses binary match: all mandatory conditions must pass.
-     *
-     *              Flow:
-     *              1. Look up Agent__c for the requesting user
-     *              2. Capacity gate: Current_Load__c < Max_Capacity__c
-     *              3. For each mandatory Routing_Skill_Mapping__mdt:
-     *                 a. Read work record field value
-     *                 b. Check if agent's capability values contain that value
-     *              4. If all mandatory pass → return matched agent
-     *              5. If any mandatory fail → throw CapabilityMismatchException
-     *
+     *              requirements. Binary match: all mandatory conditions must pass.
      * @param workRecord       The candidate SObject (e.g. Case with Province__c populated)
      * @param matchConditions  Routing_Skill_Mapping__mdt list for this config
      * @param agentUserId      The requesting agent's User Id
@@ -100,15 +57,11 @@ public with sharing class AgentMatcher {
         Id agentUserId,
         String configDevName
     ) {
-        // ─── Guard: no match conditions configured ──────────────────────
         if (matchConditions == null || matchConditions.isEmpty()) {
             return resultNoMatchConditions(agentUserId);
         }
 
-        // ─── Load agent data (transaction-cached, 0 SOQL on repeat) ─────
-        Map<Id, Agent__c> agentsByUserId =
-            AgentCapabilitySelector.getActiveAgentsByUserId();
-
+        Map<Id, Agent__c> agentsByUserId = AgentCapabilitySelector.getActiveAgentsByUserId();
         Agent__c agent = agentsByUserId.get(agentUserId);
 
         if (agent == null) {
@@ -118,15 +71,11 @@ public with sharing class AgentMatcher {
                 .inClass(CLS).inMethod('evaluate')
                 .forConfig(configDevName)
                 .log();
-            throw new CapabilityMismatchException(
-                'No active agent record found for the current user. '
-                + 'Please contact your administrator to create an Agent record.'
-            );
+            throw new CapabilityMismatchException(System.Label.URE_MATCHER_NO_AGENT);
         }
 
-        // ─── Capacity gate ──────────────────────────────────────────────
-        Decimal currentLoad = (agent.Current_Load__c != null) ? agent.Current_Load__c : 0;
-        Decimal maxCapacity = (agent.Max_Capacity__c != null) ? agent.Max_Capacity__c : 0;
+        Decimal currentLoad = agent.Current_Load__c != null ? agent.Current_Load__c : 0;
+        Decimal maxCapacity = agent.Max_Capacity__c != null ? agent.Max_Capacity__c : 0;
 
         if (maxCapacity > 0 && currentLoad >= maxCapacity) {
             Logger.info('Agent capacity exceeded | agent=' + agentUserId
@@ -137,62 +86,47 @@ public with sharing class AgentMatcher {
                 .forConfig(configDevName)
                 .log();
             throw new CapabilityMismatchException(
-                'You have reached your maximum open items ('
-                + maxCapacity.intValue() + '). '
-                + 'Please close or reassign existing work before requesting new items.'
+                String.format(
+                    System.Label.URE_MATCHER_CAPACITY_EXCEEDED,
+                    new List<Object>{maxCapacity.intValue()}
+                )
             );
         }
 
-        // ─── Load capability map (transaction-cached) ───────────────────
-        Map<Id, Map<String, Set<String>>> capabilityMap =
-            AgentCapabilitySelector.getCapabilityMap();
-
+        Map<Id, Map<String, Set<String>>> capabilityMap = AgentCapabilitySelector.getCapabilityMap();
         Map<String, Set<String>> agentCaps = capabilityMap.get(agent.Id);
         if (agentCaps == null) {
             agentCaps = new Map<String, Set<String>>();
         }
 
-        // ─── Evaluate mandatory conditions + build skill traces (Layer 4) ──
         Map<String, String> missingCaps = new Map<String, String>();
         List<RoutingConditionTrace> skillTraces = new List<RoutingConditionTrace>();
 
         for (Routing_Skill_Mapping__mdt cond : matchConditions) {
             if (cond.Is_Mandatory__c != true) {
-                continue; // Skip optional conditions in binary match mode
+                continue;
             }
 
-            // Read the work record's field value
             String fieldApiName = cond.Field_API_Name__c;
             Object fieldValue = safeGetField(workRecord, fieldApiName);
 
             if (fieldValue == null) {
-                // Null field = condition not applicable — trace as passed (N/A)
-                skillTraces.add(buildSkillTrace(
-                    cond, '', true, agentCaps
-                ));
+                skillTraces.add(buildSkillTrace(cond, '', true, agentCaps));
                 continue;
             }
 
             String recordValue = String.valueOf(fieldValue).trim();
-
-            // Get the capability DeveloperName from the match condition
             String capDevName = resolveCapabilityDevName(cond);
             Set<String> agentValues = agentCaps.get(capDevName);
-
             Boolean matched = (agentValues != null && agentValues.contains(recordValue));
 
-            // Layer 4: Build skill trace regardless of match outcome
-            skillTraces.add(buildSkillTrace(
-                cond, recordValue, matched, agentCaps
-            ));
+            skillTraces.add(buildSkillTrace(cond, recordValue, matched, agentCaps));
 
             if (!matched) {
-                String capLabel = resolveCapabilityLabel(cond);
-                missingCaps.put(capLabel, recordValue);
+                missingCaps.put(resolveCapabilityLabel(cond), recordValue);
             }
         }
 
-        // ─── Result ─────────────────────────────────────────────────────
         if (!missingCaps.isEmpty()) {
             Logger.warn('Agent failed mandatory capabilities | agent=' + agentUserId
                     + ' | missing=' + missingCaps.size()
@@ -202,7 +136,6 @@ public with sharing class AgentMatcher {
                 .forConfig(configDevName)
                 .log();
 
-            // Attach traces to a no-match result before throwing
             MatchResult noMatch = resultNoMatch(missingCaps);
             noMatch.skillTraces = skillTraces;
             throw CapabilityMismatchException.create(configDevName, missingCaps);
@@ -214,18 +147,8 @@ public with sharing class AgentMatcher {
     }
 
     /**
-     * @description Checks whether an agent has at least one capability value for every
-     *              mandatory capability TYPE required by the given match conditions.
-     *
-     *              This is a TYPE-level pre-filter (does agent have "Province" capability?)
-     *              not a VALUE-level check (does agent have "Ontario"?). VALUE matching
-     *              requires a work record and happens later in evaluate().
-     *
-     *              Used by RoutingEngine to eliminate bundles the agent can never satisfy,
-     *              saving SOQL on candidate queries that would inevitably fail.
-     *
-     *              Cost: 0 SOQL — uses transaction-cached capability map.
-     *
+     * @description TYPE-level pre-filter: checks agent has at least one value for every
+     *              mandatory capability type. 0 SOQL — uses transaction-cached capability map.
      * @param matchConditions Routing_Skill_Mapping__mdt list for a config
      * @param agentUserId    The requesting agent's User Id
      * @return True if agent has all required capability types (or no mandatory conditions exist)
@@ -234,12 +157,10 @@ public with sharing class AgentMatcher {
         List<Routing_Skill_Mapping__mdt> matchConditions,
         Id agentUserId
     ) {
-        // No match conditions = agent auto-qualifies at TYPE level
         if (matchConditions == null || matchConditions.isEmpty()) {
             return true;
         }
 
-        // Collect mandatory capability type names
         List<String> mandatoryTypes = new List<String>();
         for (Routing_Skill_Mapping__mdt cond : matchConditions) {
             if (cond.Is_Mandatory__c == true) {
@@ -247,27 +168,22 @@ public with sharing class AgentMatcher {
             }
         }
 
-        // No mandatory conditions = auto-qualifies
         if (mandatoryTypes.isEmpty()) {
             return true;
         }
 
-        // Load agent data (transaction-cached, 0 SOQL on repeat call)
-        Map<Id, Agent__c> agentsByUserId =
-            AgentCapabilitySelector.getActiveAgentsByUserId();
+        Map<Id, Agent__c> agentsByUserId = AgentCapabilitySelector.getActiveAgentsByUserId();
         Agent__c agent = agentsByUserId.get(agentUserId);
         if (agent == null) {
             return false;
         }
 
-        Map<Id, Map<String, Set<String>>> capabilityMap =
-            AgentCapabilitySelector.getCapabilityMap();
+        Map<Id, Map<String, Set<String>>> capabilityMap = AgentCapabilitySelector.getCapabilityMap();
         Map<String, Set<String>> agentCaps = capabilityMap.get(agent.Id);
         if (agentCaps == null || agentCaps.isEmpty()) {
-            return false; // Agent has zero capabilities but config requires matching
+            return false;
         }
 
-        // Verify agent has each mandatory capability TYPE
         for (String capType : mandatoryTypes) {
             if (!agentCaps.containsKey(capType)) {
                 return false;
@@ -277,30 +193,17 @@ public with sharing class AgentMatcher {
         return true;
     }
 
-    // ─── Private Helpers ────────────────────────────────────────────────────
-
-    /**
-     * @description Returns a MatchResult when no match conditions are configured.
-     *              Agent auto-qualifies but we still validate agent existence and capacity.
-     */
+    /** @description Returns a MatchResult when no match conditions are configured. */
     private static MatchResult resultNoMatchConditions(Id agentUserId) {
-        Map<Id, Agent__c> agentsByUserId =
-            AgentCapabilitySelector.getActiveAgentsByUserId();
+        Map<Id, Agent__c> agentsByUserId = AgentCapabilitySelector.getActiveAgentsByUserId();
         Agent__c agent = agentsByUserId.get(agentUserId);
-
         if (agent != null) {
             return resultMatched(agent);
         }
-
-        // No agent record but no match conditions — return unmatched (soft fail)
         return resultNoMatch(new Map<String, String>());
     }
 
-    /**
-     * @description Safely reads a field value from an SObject. Returns null if the
-     *              field is not populated or doesn't exist on the record (instead of
-     *              throwing SObjectException).
-     */
+    /** @description Safely reads a field value; returns null if not populated or missing. */
     @TestVisible
     private static Object safeGetField(SObject record, String fieldApiName) {
         if (record == null || String.isBlank(fieldApiName)) {
@@ -313,53 +216,23 @@ public with sharing class AgentMatcher {
         }
     }
 
-    /**
-     * @description Resolves the Agent_Skill__mdt DeveloperName from a
-     *              Routing_Skill_Mapping__mdt record. Uses the MD relationship field.
-     */
+    /** @description Resolves Agent_Skill__mdt DeveloperName from a Routing_Skill_Mapping__mdt record. */
     private static String resolveCapabilityDevName(Routing_Skill_Mapping__mdt cond) {
-        // Agent_Skill__c is an MD Relationship field — at runtime it holds the Id
-        // We need to resolve to DeveloperName for map lookup against Skill_Bundle_Entry__c
-        // The Skill_Bundle_Entry__c.Agent_Skill__c stores the DeveloperName as text
-        if (cond.Agent_Skill__r != null
-            && String.isNotBlank(cond.Agent_Skill__r.DeveloperName)
-        ) {
+        if (cond.Agent_Skill__r != null && String.isNotBlank(cond.Agent_Skill__r.DeveloperName)) {
             return cond.Agent_Skill__r.DeveloperName;
         }
-        // Fallback: use the Id as string (less readable but functional)
-        return (cond.Agent_Skill__c != null)
-            ? String.valueOf(cond.Agent_Skill__c)
-            : '';
+        return (cond.Agent_Skill__c != null) ? String.valueOf(cond.Agent_Skill__c) : '';
     }
 
-    /**
-     * @description Resolves the human-readable label for error messages.
-     */
+    /** @description Resolves the human-readable label for error messages. */
     private static String resolveCapabilityLabel(Routing_Skill_Mapping__mdt cond) {
-        if (cond.Agent_Skill__r != null
-            && String.isNotBlank(cond.Agent_Skill__r.Label__c)
-        ) {
+        if (cond.Agent_Skill__r != null && String.isNotBlank(cond.Agent_Skill__r.Label__c)) {
             return cond.Agent_Skill__r.Label__c;
         }
         return resolveCapabilityDevName(cond);
     }
 
-    // =========================================================================
-    // LAYER 4 -- Skill Match Trace Builder
-    // =========================================================================
-
-    /**
-     * @description Builds a RoutingConditionTrace with traceSource='SKILL_MATCH' for
-     *              a single Routing_Skill_Mapping__mdt evaluation. Captures the skill
-     *              dimension name, what the record required, what the agent has, and
-     *              whether the match passed.
-     *
-     * @param cond        The skill mapping being evaluated
-     * @param recordValue The value from the work record's field (blank if null)
-     * @param passed      Whether the agent's skills contain the required value
-     * @param agentCaps   The agent's merged capability map (skill dev name -> values)
-     * @return RoutingConditionTrace with traceSource='SKILL_MATCH'
-     */
+    /** @description Builds a SKILL_MATCH trace for a single Routing_Skill_Mapping__mdt evaluation. */
     private static RoutingConditionTrace buildSkillTrace(
         Routing_Skill_Mapping__mdt cond,
         String recordValue,
@@ -367,23 +240,14 @@ public with sharing class AgentMatcher {
         Map<String, Set<String>> agentCaps
     ) {
         String capDevName = resolveCapabilityDevName(cond);
-        String capLabel = resolveCapabilityLabel(cond);
-
-        // Expected = agent's values for this skill dimension
         Set<String> agentValues = agentCaps.get(capDevName);
         String expectedValue = (agentValues != null && !agentValues.isEmpty())
-            ? String.join(new List<String>(agentValues), ', ')
-            : '(none)';
+            ? String.join(new List<String>(agentValues), ', ') : '(none)';
 
         RoutingConditionTrace trace = RoutingConditionTrace.create(
-            cond.Field_API_Name__c,
-            'SKILL_MATCH',
-            expectedValue,
-            recordValue,
-            passed
+            cond.Field_API_Name__c, 'SKILL_MATCH', expectedValue, recordValue, passed
         );
         trace.traceSource = 'SKILL_MATCH';
-
         return trace;
     }
 }

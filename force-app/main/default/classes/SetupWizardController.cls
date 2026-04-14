@@ -49,14 +49,14 @@ public with sharing class SetupWizardController {
     @AuraEnabled(cacheable=true)
     public static List<FieldDescribeResult> describeSObjectFields(String sObjectType) {
         if (String.isBlank(sObjectType)) {
-            throw new AuraHandledException('SObject API name is required.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_SOBJECT_REQUIRED);
         }
 
         Schema.SObjectType sobjType = Schema.getGlobalDescribe().get(sObjectType);
         if (sobjType == null) {
             throw new AuraHandledException(
-                'SObject type "' + String.escapeSingleQuotes(sObjectType)
-                + '" does not exist or is not accessible.'
+                String.format(System.Label.URE_WIZARD_SOBJECT_NOT_FOUND,
+                    new List<Object>{String.escapeSingleQuotes(sObjectType)})
             );
         }
 
@@ -64,7 +64,7 @@ public with sharing class SetupWizardController {
         Schema.DescribeSObjectResult objDescribe = sobjType.getDescribe();
         if (!objDescribe.isAccessible()) {
             throw new AuraHandledException(
-                'You do not have access to ' + objDescribe.getLabel() + '.'
+                String.format(System.Label.URE_WIZARD_NO_ACCESS, new List<Object>{objDescribe.getLabel()})
             );
         }
 
@@ -385,17 +385,17 @@ public with sharing class SetupWizardController {
         String configDevName
     ) {
         if (String.isBlank(recordId)) {
-            throw new AuraHandledException('A sample record ID is required for simulation.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_RECORD_REQUIRED);
         }
 
         if (String.isBlank(configDevName)) {
-            throw new AuraHandledException('Config developer name is required for simulation.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_CONFIG_REQUIRED_SIM);
         }
 
         // Validate recordId format
         String trimmedId = recordId.trim();
         if (trimmedId.length() != 15 && trimmedId.length() != 18) {
-            throw new AuraHandledException('Invalid record ID format.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_INVALID_RECORD_ID);
         }
 
         RoutingRequest request = new RoutingRequest();
@@ -408,7 +408,7 @@ public with sharing class SetupWizardController {
             Id parsedId = Id.valueOf(trimmedId);
             request.objectApiName = parsedId.getSObjectType().getDescribe().getName();
         } catch (Exception ex) {
-            throw new AuraHandledException('Unable to determine SObject type from record ID.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_CANNOT_DETERMINE_TYPE);
         }
 
         // Call RoutingService — dryRun prevents all side effects (Layer 2)
@@ -461,14 +461,16 @@ public with sharing class SetupWizardController {
     @AuraEnabled
     public static DeployResult deployConfig(String wizardStateJson) {
         if (String.isBlank(wizardStateJson)) {
-            throw new AuraHandledException('Wizard state is required for deployment.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_STATE_REQUIRED);
         }
 
         WizardState state;
         try {
             state = (WizardState) JSON.deserialize(wizardStateJson, WizardState.class);
         } catch (Exception ex) {
-            throw new AuraHandledException('Invalid wizard state format: ' + ex.getMessage());
+            throw new AuraHandledException(
+                String.format(System.Label.URE_WIZARD_STATE_INVALID, new List<Object>{ex.getMessage()})
+            );
         }
 
         // Validate required fields
@@ -517,7 +519,7 @@ public with sharing class SetupWizardController {
             deployResult.message = 'Configuration deployment started.';
         } catch (Exception ex) {
             throw new AuraHandledException(
-                'Failed to start deployment: ' + ex.getMessage()
+                String.format(System.Label.URE_WIZARD_DEPLOY_START_FAILED, new List<Object>{ex.getMessage()})
             );
         }
 
@@ -541,7 +543,7 @@ public with sharing class SetupWizardController {
     @AuraEnabled
     public static DeployStatusResult getDeployStatus(String deploymentId) {
         if (String.isBlank(deploymentId)) {
-            throw new AuraHandledException('Deployment ID is required.');
+            throw new AuraHandledException(System.Label.URE_WIZARD_DEPLOY_ID_REQUIRED);
         }
 
         DeployStatusResult status = new DeployStatusResult();
@@ -593,7 +595,9 @@ public with sharing class SetupWizardController {
         } catch (Exception ex) {
             status.done = true;
             status.success = false;
-            status.errorMessage = 'Deployment check error: ' + ex.getMessage();
+            status.errorMessage = String.format(
+                System.Label.URE_WIZARD_DEPLOY_CHECK_ERROR, new List<Object>{ex.getMessage()}
+            );
         }
 
         return status;
@@ -672,21 +676,21 @@ public with sharing class SetupWizardController {
         List<String> errors = new List<String>();
 
         if (String.isBlank(state.objectApiName)) {
-            errors.add('Object API name is required.');
+            errors.add(System.Label.URE_WIZARD_OBJECT_REQUIRED);
         }
         if (String.isBlank(state.configLabel)) {
-            errors.add('Configuration name is required.');
+            errors.add(System.Label.URE_WIZARD_CONFIG_NAME_REQUIRED);
         }
         if (String.isBlank(state.configDevName)) {
-            errors.add('Configuration developer name is required.');
+            errors.add(System.Label.URE_WIZARD_CONFIG_DEVNAME_REQUIRED);
         }
         if (String.isBlank(state.ownerFieldApiName)) {
-            errors.add('Owner field API name is required.');
+            errors.add(System.Label.URE_WIZARD_OWNER_FIELD_REQUIRED);
         }
 
         if (!errors.isEmpty()) {
             throw new AuraHandledException(
-                'Missing required fields: ' + String.join(errors, ' ')
+                String.format(System.Label.URE_WIZARD_MISSING_FIELDS, new List<Object>{String.join(errors, ' ')})
             );
         }
 
@@ -694,8 +698,8 @@ public with sharing class SetupWizardController {
         Schema.SObjectType sobjType = Schema.getGlobalDescribe().get(state.objectApiName);
         if (sobjType == null || !sobjType.getDescribe().isAccessible()) {
             throw new AuraHandledException(
-                'SObject "' + String.escapeSingleQuotes(state.objectApiName)
-                + '" is not accessible.'
+                String.format(System.Label.URE_WIZARD_SOBJECT_NOT_ACCESSIBLE,
+                    new List<Object>{String.escapeSingleQuotes(state.objectApiName)})
             );
         }
     }

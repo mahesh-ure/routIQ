@@ -28,6 +28,12 @@ import LABEL_SUCCESS from '@salesforce/label/c.URE_WizardDeploySuccess';
 import LABEL_FAILED from '@salesforce/label/c.URE_WizardDeployFailed';
 import LABEL_SIMULATING from '@salesforce/label/c.URE_WizardSimulating';
 import LABEL_ACTIVATE from '@salesforce/label/c.URE_WizardFinish';
+import LABEL_SAMPLE_ERROR from '@salesforce/label/c.URE_WizardSampleRecordError';
+import LABEL_SIM_FAILED from '@salesforce/label/c.URE_WizardSimulationFailed';
+import LABEL_DEPLOY_START_FAILED from '@salesforce/label/c.URE_WizardDeployStartFailed';
+import LABEL_DEPLOY_ERROR from '@salesforce/label/c.URE_WizardDeployError';
+import LABEL_DEPLOY_TIMEOUT from '@salesforce/label/c.URE_WizardDeployTimeout';
+import LABEL_DEPLOY_CONN_LOST from '@salesforce/label/c.URE_WizardDeployConnectionLost';
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 60; // 3 min max
@@ -92,7 +98,7 @@ export default class UreWizardStep5Simulate extends LightningElement {
 
     async handleSimulate() {
         if (!this.sampleRecordId?.trim()) {
-            this.simulateError = 'Please enter a sample record ID.';
+            this.simulateError = LABEL_SAMPLE_ERROR;
             return;
         }
 
@@ -107,7 +113,7 @@ export default class UreWizardStep5Simulate extends LightningElement {
             });
             this.simulateResult = result;
         } catch (error) {
-            this.simulateError = error.body?.message || 'Simulation failed.';
+            this.simulateError = error.body?.message || LABEL_SIM_FAILED;
         } finally {
             this.isSimulating = false;
         }
@@ -137,11 +143,11 @@ export default class UreWizardStep5Simulate extends LightningElement {
                 this.startPollTimer();
             } else {
                 this.isDeploying = false;
-                this.deployError = result.message || 'Deployment failed to start.';
+                this.deployError = result.message || LABEL_DEPLOY_START_FAILED;
             }
         } catch (error) {
             this.isDeploying = false;
-            this.deployError = error.body?.message || 'Deployment failed.';
+            this.deployError = error.body?.message || LABEL_DEPLOY_ERROR;
         }
     }
 
@@ -168,7 +174,7 @@ export default class UreWizardStep5Simulate extends LightningElement {
         if (this.pollAttempts > MAX_POLL_ATTEMPTS) {
             this.clearPollTimer();
             this.isDeploying = false;
-            this.deployError = 'Deployment polling timed out. Check Setup > Deployment Status.';
+            this.deployError = LABEL_DEPLOY_TIMEOUT;
             return;
         }
 
@@ -202,7 +208,7 @@ export default class UreWizardStep5Simulate extends LightningElement {
             if (this.pollAttempts > 5) {
                 this.clearPollTimer();
                 this.isDeploying = false;
-                this.deployError = error.body?.message || 'Lost connection to deployment.';
+                this.deployError = error.body?.message || LABEL_DEPLOY_CONN_LOST;
             }
         }
     }

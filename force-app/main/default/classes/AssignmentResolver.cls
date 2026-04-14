@@ -73,7 +73,7 @@ public with sharing class AssignmentResolver {
         o.retryCount = 0;
         o.candidateCount = candidateCount;
         o.status = 'No_Match';
-        o.errorMessage = 'No matching candidates found.';
+        o.errorMessage = System.Label.URE_RESOLVER_NO_MATCH;
         return o;
     }
 
@@ -91,7 +91,7 @@ public with sharing class AssignmentResolver {
         o.retryCount = 0;
         o.candidateCount = 0;
         o.status = 'No_Match';
-        o.errorMessage = 'Agent has reached the per-config capacity (Max_Capacity__c) for this object type.';
+        o.errorMessage = System.Label.URE_RESOLVER_CAPACITY_EXCEEDED;
         return o;
     }
 
@@ -108,8 +108,10 @@ public with sharing class AssignmentResolver {
         o.retryCount = retryCount;
         o.candidateCount = candidateCount;
         o.status = 'Retry_Exhausted';
-        o.errorMessage = 'Lock contention: unable to acquire lock after '
-            + retryCount + ' attempts across ' + candidateCount + ' candidates.';
+        o.errorMessage = String.format(
+            System.Label.URE_RESOLVER_LOCK_EXHAUSTED,
+            new List<Object>{retryCount, candidateCount}
+        );
         return o;
     }
 
@@ -397,7 +399,7 @@ public with sharing class AssignmentResolver {
      */
     private static String formatDmlErrors(List<Database.Error> errors) {
         if (errors == null || errors.isEmpty()) {
-            return 'Unknown DML error.';
+            return System.Label.URE_RESOLVER_UNKNOWN_DML_ERROR;
         }
         List<String> messages = new List<String>();
         for (Database.Error err : errors) {
