@@ -265,7 +265,7 @@ public with sharing class AuditLogger {
      */
     private static String formatErrors(List<Database.Error> errors) {
         if (errors == null || errors.isEmpty()) {
-            return 'Unknown error.';
+            return System.Label.URE_UNKNOWN_ERROR;
         }
         List<String> messages = new List<String>();
         for (Database.Error err : errors) {

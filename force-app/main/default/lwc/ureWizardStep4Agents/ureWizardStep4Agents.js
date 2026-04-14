@@ -1,7 +1,7 @@
 /**
  * @description Step 4 — Agent selection with capability badge derivation from Step 3
- *              conditions. Loads active agents and allows the user to select which
- *              agents will receive routed records.
+ *              conditions. Searches ALL active Salesforce Users (not just existing
+ *              Agent__c records) so the wizard works on a fresh install.
  *
  *              Skill badges are derived from Step 3 conditions: each condition's
  *              fieldApiName becomes a skill dimension, and the condition's values
@@ -12,16 +12,21 @@
  * @group UI
  */
 import { LightningElement, api, track } from 'lwc';
-import getActiveAgents from '@salesforce/apex/SetupWizardController.getActiveAgents';
+import searchAvailableUsers from '@salesforce/apex/SetupWizardController.searchAvailableUsers';
 
 import LABEL_SELECT_AGENTS from '@salesforce/label/c.URE_WizardSelectAgents';
 import LABEL_NO_AGENTS from '@salesforce/label/c.URE_WizardNoAgents';
+import LABEL_SEARCH_USERS from '@salesforce/label/c.URE_WizardSearchUsers';
+import LABEL_LOAD_USERS_FAILED from '@salesforce/label/c.URE_WizardLoadUsersFailed';
+
+const SEARCH_DELAY_MS = 300;
 
 export default class UreWizardStep4Agents extends LightningElement {
 
     label = {
         selectAgents: LABEL_SELECT_AGENTS,
-        noAgents: LABEL_NO_AGENTS
+        noAgents: LABEL_NO_AGENTS,
+        searchUsers: LABEL_SEARCH_USERS
     };
 
     @api wizardState = {};
@@ -33,8 +38,10 @@ export default class UreWizardStep4Agents extends LightningElement {
     @track managerOptions = [];
     selectedProfileId = '';
     selectedManagerId = '';
+    searchTerm = '';
     isLoading = false;
     error = '';
+    _searchTimer;
 
     connectedCallback() {
         // Restore previously selected agents
@@ -43,7 +50,7 @@ export default class UreWizardStep4Agents extends LightningElement {
                 this.wizardState.agents.map(a => a.userId)
             );
         }
-        this.loadAgents();
+        this.loadUsers('');
     }
 
     // ─── Public API ─────────────────────────────────────────────────────
@@ -55,20 +62,23 @@ export default class UreWizardStep4Agents extends LightningElement {
 
     // ─── Data Loading ───────────────────────────────────────────────────
 
-    async loadAgents() {
+    async loadUsers(searchTerm) {
         this.isLoading = true;
         this.error = '';
         try {
-            const result = await getActiveAgents();
+            const result = await searchAvailableUsers({ searchTerm });
             this.allAgents = result.map(agent => ({
                 ...agent,
                 selected: this.selectedAgentIds.has(agent.userId),
-                capacityDisplay: `${agent.currentLoad}/${agent.maxCapacity}`
+                capacityDisplay: agent.agentId
+                    ? `${agent.currentLoad}/${agent.maxCapacity}`
+                    : 'New',
+                isExistingAgent: !!agent.agentId
             }));
             this.agents = this.allAgents;
             this.buildFilterOptions();
         } catch (err) {
-            this.error = err.body?.message || 'Failed to load agents.';
+            this.error = err.body?.message || LABEL_LOAD_USERS_FAILED;
             this.allAgents = [];
             this.agents = [];
         } finally {
@@ -111,6 +121,22 @@ export default class UreWizardStep4Agents extends LightningElement {
                 })
                 .sort((a, b) => a.label.localeCompare(b.label))
         ];
+    }
+
+    // ─── Search ────────────────────────────────────────────────────────
+
+    handleSearchChange(event) {
+        this.searchTerm = event.target.value;
+
+        // Debounce search calls
+        if (this._searchTimer) {
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            clearTimeout(this._searchTimer);
+        }
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        this._searchTimer = setTimeout(() => {
+            this.loadUsers(this.searchTerm);
+        }, SEARCH_DELAY_MS);
     }
 
     /**
@@ -175,7 +201,7 @@ export default class UreWizardStep4Agents extends LightningElement {
     }
 
     handleSelectAll() {
-        const newSet = new Set();
+        const newSet = new Set(this.selectedAgentIds);
         this.agents.forEach(a => newSet.add(a.userId));
         this.selectedAgentIds = newSet;
         this.agents = this.agents.map(a => ({ ...a, selected: true }));
@@ -183,7 +209,10 @@ export default class UreWizardStep4Agents extends LightningElement {
     }
 
     handleDeselectAll() {
-        this.selectedAgentIds = new Set();
+        // Only deselect agents currently visible (filtered)
+        const newSet = new Set(this.selectedAgentIds);
+        this.agents.forEach(a => newSet.delete(a.userId));
+        this.selectedAgentIds = newSet;
         this.agents = this.agents.map(a => ({ ...a, selected: false }));
         this.fireStepData();
     }
@@ -191,7 +220,9 @@ export default class UreWizardStep4Agents extends LightningElement {
     // ─── Helpers ────────────────────────────────────────────────────────
 
     fireStepData() {
-        const selectedAgents = this.agents
+        // Build selected agents from ALL agents (not just visible)
+        const allKnown = [...this.allAgents];
+        const selectedAgents = allKnown
             .filter(a => this.selectedAgentIds.has(a.userId))
             .map(a => ({
                 userId: a.userId,
@@ -240,7 +271,7 @@ export default class UreWizardStep4Agents extends LightningElement {
     }
 
     get selectionSummary() {
-        return `${this.selectedCount} of ${this.totalCount} agents selected`;
+        return `${this.selectedCount} of ${this.totalCount} users selected`;
     }
 
     /**

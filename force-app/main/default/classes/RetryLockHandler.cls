@@ -74,7 +74,7 @@ public with sharing class RetryLockHandler {
         o.success = false;
         o.retryCount = retries;
         o.exhausted = false;
-        o.errorMessage = 'Record no longer exists or is not visible to the running user.';
+        o.errorMessage = System.Label.URE_LOCK_RECORD_GONE;
         return o;
     }
 
@@ -86,7 +86,10 @@ public with sharing class RetryLockHandler {
         o.success = false;
         o.retryCount = retries;
         o.exhausted = true;
-        o.errorMessage = 'Lock contention: exhausted ' + retries + ' retry attempts.';
+        o.errorMessage = String.format(
+            System.Label.URE_LOCK_EXHAUSTED,
+            new List<Object>{retries}
+        );
         return o;
     }
 

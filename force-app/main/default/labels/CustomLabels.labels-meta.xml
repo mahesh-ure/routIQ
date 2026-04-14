@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
 
-    <!-- ── Routing Console: Button & States ──────────────────────────── -->
+    <!-- ══ Routing Console: Button & States ══════════════════════════ -->
 
     <labels>
         <fullName>URE_NextBestAction</fullName>
@@ -27,7 +27,7 @@
         <value>Assigned</value>
     </labels>
 
-    <!-- ── Routing Console: Toast Messages ───────────────────────────── -->
+    <!-- ══ Routing Console: Toast Messages ═══════════════════════════ -->
 
     <labels>
         <fullName>URE_RecordAssigned</fullName>
@@ -45,7 +45,7 @@
         <value>Routing Error</value>
     </labels>
 
-    <!-- ── Routing Console: Error Messages ───────────────────────────── -->
+    <!-- ══ Routing Console: Error Messages ═══════════════════════════ -->
 
     <labels>
         <fullName>URE_NoRecordsAvailable</fullName>
@@ -63,7 +63,7 @@
         <value>An unexpected error occurred.</value>
     </labels>
 
-    <!-- ── Routing Console: Accessibility ─────────────────────────────── -->
+    <!-- ══ Routing Console: Accessibility ════════════════════════════ -->
 
     <labels>
         <fullName>URE_FindingNextRecord</fullName>
@@ -73,7 +73,727 @@
         <value>Finding next record</value>
     </labels>
 
-    <!-- ── Setup Wizard: Navigation ─────────────────────────────────── -->
+    <!-- ══ Routing Engine: Error Messages ════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_ROUTING_NO_MATCH</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No matching candidates found</shortDescription>
+        <value>No matching candidates found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_MALFORMED_REQUEST</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Malformed REST request body error</shortDescription>
+        <value>Malformed request body: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_INTERNAL_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Unhandled internal routing error</shortDescription>
+        <value>Internal routing error: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_VALIDATION_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Request validation failure message</shortDescription>
+        <value>Validation failed: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_NO_AGENT_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No active Agent record for current user</shortDescription>
+        <value>No active Agent record found for the current user. An administrator must create an Agent record and assign the required capabilities before routing can proceed.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_CAPACITY_FULL_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent capacity exceeded error with placeholders</shortDescription>
+        <value>Agent has reached maximum capacity ({0}/{1}). Close or reassign existing items before requesting new work.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_AVAILABILITY_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent unavailable due to status</shortDescription>
+        <value>Agent is currently {0}. Change your availability to Online or Busy to receive work.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_NO_CONFIG_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No active routing configurations found</shortDescription>
+        <value>No active routing configurations found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_NO_CAPABILITY_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent lacks capabilities for all configs</shortDescription>
+        <value>Agent does not have the required capabilities for any applicable routing configuration.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_NO_MATCH_SUMMARY</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No match summary with config count</shortDescription>
+        <value>No matching candidates found across {0} qualified configuration(s).{1}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_BUSY_EXCLUDED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent excluded because Busy agents not included</shortDescription>
+        <value>Agent is Busy and this configuration excludes Busy agents.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_CAPABILITY_MISMATCH</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent does not match required capabilities</shortDescription>
+        <value>Agent does not match required capabilities.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ROUTING_NO_MATCH_DRYRUN</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No match found during dry run simulation</shortDescription>
+        <value>No matching candidates found (dry run).</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: Section Titles ══════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Work Panel card title</shortDescription>
+        <value>My Work</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelQueueDepth</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Queue depth badge label</shortDescription>
+        <value>In Queue</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelCurrentLoad</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Current load indicator label</shortDescription>
+        <value>My Load</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: Buttons ═════════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelDefer</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer work button label</shortDescription>
+        <value>Defer</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferring</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Button label while defer in progress</shortDescription>
+        <value>Deferring...</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: Status ══════════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelOnline</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Online status label</shortDescription>
+        <value>Online</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelBusy</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Busy status label</shortDescription>
+        <value>Busy</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelAway</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Away status label</shortDescription>
+        <value>Away</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelOffline</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Offline status label</shortDescription>
+        <value>Offline</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelStatusLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Status toggle section label</shortDescription>
+        <value>Availability</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: SLA ═════════════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelSlaRemaining</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA time remaining label</shortDescription>
+        <value>SLA Remaining</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelSlaExpired</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA expired message</shortDescription>
+        <value>SLA Expired</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: Empty / Error States ════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelEmptyTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state heading when no work assigned</shortDescription>
+        <value>No Work Assigned</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelEmptyBody</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Empty state body text</shortDescription>
+        <value>Click Next Best Action to pull your next work item.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferSuccess</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Toast title after successful defer</shortDescription>
+        <value>Work Deferred</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelDeferError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Toast title for defer failures</shortDescription>
+        <value>Defer Failed</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelNoAgent</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error when no Agent record found</shortDescription>
+        <value>No agent record found for your user. Contact your administrator.</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel: Accessibility ═══════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WorkPanelLoadingWork</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text while fetching work</shortDescription>
+        <value>Finding next work item</value>
+    </labels>
+
+    <!-- ══ Agent Work Panel Controller: Error Messages ═══════════════ -->
+
+    <labels>
+        <fullName>URE_PANEL_NO_AGENT_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No agent record found for panel controller</shortDescription>
+        <value>No active Agent record found for the current user. Contact your administrator to create an Agent record.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_RECORD_ID_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Record ID required for defer</shortDescription>
+        <value>Record Id is required to defer work.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_CONFIG_REQUIRED_DEFER</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Config dev name required for defer</shortDescription>
+        <value>Config developer name is required to determine defer behavior.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_CONFIG_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Routing config not found by dev name</shortDescription>
+        <value>Routing config &quot;{0}&quot; not found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_DEFER_NOT_CONFIGURED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer fields not configured on config</shortDescription>
+        <value>Defer is not configured for routing config &quot;{0}&quot;. Set Defer_Reset_Field__c and Defer_Reset_Value__c on the config.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_OBJECT_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object does not exist in org</shortDescription>
+        <value>Object &quot;{0}&quot; does not exist in this org.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_FIELD_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer field does not exist on object</shortDescription>
+        <value>Defer field &quot;{0}&quot; does not exist on {1}.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_NO_UPDATE_ACCESS</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>User lacks update access on field</shortDescription>
+        <value>Current user lacks update access on {0}.{1}.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_DEFER_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer DML operation failed</shortDescription>
+        <value>Defer failed: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_PANEL_OBJECT_SCHEMA_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object not found in schema describe</shortDescription>
+        <value>Object &quot;{0}&quot; not found in schema.</value>
+    </labels>
+
+    <!-- ══ Agent Availability Controller: Error Messages ═════════════ -->
+
+    <labels>
+        <fullName>URE_AVAIL_INVALID_STATUS</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Invalid availability status value</shortDescription>
+        <value>Invalid status &quot;{0}&quot;. Valid values: Online, Busy, Away, Offline.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_AVAIL_AGENT_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent Id required for status update</shortDescription>
+        <value>Agent Id is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_AVAIL_UPDATE_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent status update DML failed</shortDescription>
+        <value>Failed to update agent status: {0}</value>
+    </labels>
+
+    <!-- ══ Scheduled Job Controller: Error Messages ══════════════════ -->
+
+    <labels>
+        <fullName>URE_JOB_ALREADY_SCHEDULED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Job already scheduled error</shortDescription>
+        <value>Job &quot;{0}&quot; is already scheduled. Unschedule it first before rescheduling.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_CLASS_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Schedulable Apex class not found</shortDescription>
+        <value>Apex class &quot;{0}&quot; not found. Verify the class name in the Scheduled Job Config.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_NOT_SCHEDULABLE</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Class does not implement Schedulable</shortDescription>
+        <value>Class &quot;{0}&quot; does not implement Schedulable.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_SCHEDULE_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Failed to schedule job</shortDescription>
+        <value>Failed to schedule job: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_CONFIG_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Config developer name required</shortDescription>
+        <value>Config developer name is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_NOT_SCHEDULED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Job not currently scheduled</shortDescription>
+        <value>Job &quot;{0}&quot; is not currently scheduled.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_UNSCHEDULE_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Failed to unschedule job</shortDescription>
+        <value>Failed to unschedule job: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_CONFIG_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Scheduled Job Config not found</shortDescription>
+        <value>Scheduled Job Config &quot;{0}&quot; not found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_DISABLED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Job is disabled in config</shortDescription>
+        <value>Job &quot;{0}&quot; is disabled. Enable it in Scheduled Job Config before scheduling.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_JOB_CLASS_NOT_CONFIGURED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Job class name not configured</shortDescription>
+        <value>Job class name is not configured for &quot;{0}&quot;.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard Controller: Error Messages ═══════════════════ -->
+
+    <labels>
+        <fullName>URE_WIZARD_SOBJECT_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SObject API name required</shortDescription>
+        <value>SObject API name is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_SOBJECT_NOT_FOUND</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SObject type not found or inaccessible</shortDescription>
+        <value>SObject type &quot;{0}&quot; does not exist or is not accessible.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_NO_ACCESS</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>User lacks access to object</shortDescription>
+        <value>You do not have access to {0}.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_RECORD_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Sample record ID required for simulation</shortDescription>
+        <value>A sample record ID is required for simulation.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_CONFIG_REQUIRED_SIM</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Config dev name required for simulation</shortDescription>
+        <value>Config developer name is required for simulation.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_INVALID_RECORD_ID</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Invalid record ID format</shortDescription>
+        <value>Invalid record ID format.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_CANNOT_DETERMINE_TYPE</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Cannot determine SObject type from record ID</shortDescription>
+        <value>Unable to determine SObject type from record ID.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_STATE_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Wizard state required for deployment</shortDescription>
+        <value>Wizard state is required for deployment.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_STATE_INVALID</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Invalid wizard state JSON format</shortDescription>
+        <value>Invalid wizard state format: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_DEPLOY_START_FAILED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Failed to start CMDT deployment</shortDescription>
+        <value>Failed to start deployment: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_DEPLOY_ID_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deployment ID required for status check</shortDescription>
+        <value>Deployment ID is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_DEPLOY_CHECK_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error checking deployment status</shortDescription>
+        <value>Deployment check error: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_MISSING_FIELDS</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Missing required wizard state fields</shortDescription>
+        <value>Missing required fields: {0}</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_SOBJECT_NOT_ACCESSIBLE</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SObject not accessible to user</shortDescription>
+        <value>SObject &quot;{0}&quot; is not accessible.</value>
+    </labels>
+
+    <!-- ══ Agent Matcher: Error Messages ═════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_MATCHER_NO_AGENT</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No active agent for current user in matcher</shortDescription>
+        <value>No active agent record found for the current user. Please contact your administrator to create an Agent record.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_MATCHER_CAPACITY_EXCEEDED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent capacity exceeded in matcher</shortDescription>
+        <value>You have reached your maximum open items ({0}). Please close or reassign existing work before requesting new items.</value>
+    </labels>
+
+    <!-- ══ Capability Mismatch Exception ═════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_CAPABILITY_MISMATCH_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Capability mismatch with config and missing details</shortDescription>
+        <value>No agents match mandatory capabilities for config &quot;{0}&quot;. Missing agent setup values: {1}. Please contact your administrator to update agent capability assignments.</value>
+    </labels>
+
+    <!-- ══ Rule Evaluator: Validation Messages ═══════════════════════ -->
+
+    <labels>
+        <fullName>URE_VALIDATE_OBJECT_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object API Name required validation</shortDescription>
+        <value>Object_API_Name__c is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_OWNER_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Owner Field API Name required validation</shortDescription>
+        <value>Owner_Field_API_Name__c is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_LIMIT_POSITIVE</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Candidate limit must be positive</shortDescription>
+        <value>Candidate_Limit__c must be a positive number.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_COND_FIELD_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition field API name required</shortDescription>
+        <value>Condition #{0}: Field_API_Name__c is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_COND_OPERATOR_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition operator required</shortDescription>
+        <value>Condition #{0}: Operator__c is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_COND_VALUES_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition values required for STATIC source</shortDescription>
+        <value>Condition #{0}: Values__c is required for STATIC source.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_PRIORITY_FIELD_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Priority sort field required</shortDescription>
+        <value>Priority #{0}: Sort_Field_API_Name__c is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_VALIDATE_NO_RECORD_TYPES</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Record type configured but none enabled</shortDescription>
+        <value>Record_Type_Dev_Name__c is configured but {0} has no Record Types enabled.</value>
+    </labels>
+
+    <!-- ══ Assignment Resolver: Error Messages ═══════════════════════ -->
+
+    <labels>
+        <fullName>URE_ASSIGN_NO_MATCH</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No matching candidates in resolver</shortDescription>
+        <value>No matching candidates found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ASSIGN_CAPACITY_REACHED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Per-config capacity reached</shortDescription>
+        <value>Agent has reached the per-config capacity (Max_Capacity__c) for this object type.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_ASSIGN_LOCK_EXHAUSTED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Lock contention retries exhausted</shortDescription>
+        <value>Lock contention: unable to acquire lock after {0} attempts across {1} candidates.</value>
+    </labels>
+
+    <!-- ══ Wizard Validation: State Fields ═══════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WIZARD_OBJECT_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Object API name required in wizard state</shortDescription>
+        <value>Object API name is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_CONFIG_NAME_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Configuration name required in wizard state</shortDescription>
+        <value>Configuration name is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_CONFIG_DEVNAME_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Configuration dev name required in wizard state</shortDescription>
+        <value>Configuration developer name is required.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WIZARD_OWNER_FIELD_REQUIRED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Owner field required in wizard state</shortDescription>
+        <value>Owner field API name is required.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Navigation ══════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardTitle</fullName>
@@ -115,7 +835,7 @@
         <value>Cancel</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step Titles ──────────────────────────────────── -->
+    <!-- ══ Setup Wizard: Step Titles ═════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardStep1Title</fullName>
@@ -157,7 +877,7 @@
         <value>Simulate &amp; Activate</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step 1 ───────────────────────────────────────── -->
+    <!-- ══ Setup Wizard: Step 1 ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardObjectLabel</fullName>
@@ -199,7 +919,39 @@
         <value>This object does not exist or is not accessible.</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step 2 ───────────────────────────────────────── -->
+    <labels>
+        <fullName>URE_WizardValidateButton</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Validate button label for object check</shortDescription>
+        <value>Validate</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardValidatingSpinner</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text during object validation</shortDescription>
+        <value>Validating object</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardExistingConfigs</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Existing configurations section title</shortDescription>
+        <value>Existing Configurations</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardActiveBadge</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Active badge label for existing configs</shortDescription>
+        <value>Active</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Step 2 ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardConfigNameLabel</fullName>
@@ -241,7 +993,111 @@
         <value>Include Busy Agents</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step 3 ───────────────────────────────────────── -->
+    <labels>
+        <fullName>URE_WizardDevNameLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Developer Name input label</shortDescription>
+        <value>Developer Name</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardAssignmentFieldLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Assignment field input label</shortDescription>
+        <value>Assignment Field (optional)</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardAssignmentFieldPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Assignment field placeholder text</shortDescription>
+        <value>Leave blank to use Owner Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardOwnerFieldPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Owner field placeholder text</shortDescription>
+        <value>e.g. OwnerId</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardPriorityWeightLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Priority weight input label</shortDescription>
+        <value>Priority Weight</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardPriorityWeightHelp</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Priority weight help text</shortDescription>
+        <value>Lower weight = higher priority. Default: 100.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSlaPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA field placeholder text</shortDescription>
+        <value>e.g. SlaExitDate</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSlaHelp</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SLA field help text</shortDescription>
+        <value>DateTime field for SLA countdown. Optional.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeferTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer settings section title</shortDescription>
+        <value>Defer Settings (Optional)</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeferFieldLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer reset field input label</shortDescription>
+        <value>Defer Reset Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeferFieldPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer reset field placeholder</shortDescription>
+        <value>e.g. OwnerId or Status</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeferValueLabel</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer reset value input label</shortDescription>
+        <value>Defer Reset Value</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeferValuePlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Defer reset value placeholder</shortDescription>
+        <value>e.g. Queue ID or Open</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Step 3 ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardAddCondition</fullName>
@@ -291,25 +1147,169 @@
         <value>No conditions defined. Add at least one condition to filter which records are routed.</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step 4 ───────────────────────────────────────── -->
+    <labels>
+        <fullName>URE_WizardConditionValuesPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Condition values placeholder text</shortDescription>
+        <value>Comma-separated values</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardLoadingFields</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text while loading fields</shortDescription>
+        <value>Loading fields</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Step 4 ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardSelectAgents</fullName>
         <language>en_US</language>
         <protected>true</protected>
         <shortDescription>Agent selection instruction</shortDescription>
-        <value>Select agents who will receive routed records. Skill badges are derived from your conditions in Step 3.</value>
+        <value>Select users who will act as routing agents. Skill badges are derived from your conditions in Step 3.</value>
     </labels>
 
     <labels>
         <fullName>URE_WizardNoAgents</fullName>
         <language>en_US</language>
         <protected>true</protected>
-        <shortDescription>No agents available message</shortDescription>
-        <value>No active agents found. Create Agent records before assigning routing.</value>
+        <shortDescription>No users found message</shortDescription>
+        <value>No active users found matching your search. Try a different search term or clear filters.</value>
     </labels>
 
-    <!-- ── Setup Wizard: Step 5 ───────────────────────────────────────── -->
+    <labels>
+        <fullName>URE_WizardSearchUsers</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>User search input label</shortDescription>
+        <value>Search Users</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSearchPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Search input placeholder text</shortDescription>
+        <value>Search by name...</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardFilterTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Filter section title</shortDescription>
+        <value>Filter (Optional)</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardFilterByProfile</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Filter by profile combobox label</shortDescription>
+        <value>Filter by Profile</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSelectProfile</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Profile combobox placeholder</shortDescription>
+        <value>Select a profile</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardFilterByManager</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Filter by manager combobox label</shortDescription>
+        <value>Filter by Manager</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSelectManager</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Manager combobox placeholder</shortDescription>
+        <value>Select a manager</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRequiredSkills</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Required skills section title</shortDescription>
+        <value>Required Skills</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardLoadingUsers</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Spinner alt text while loading users</shortDescription>
+        <value>Loading users</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSelectAll</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Select all agents button</shortDescription>
+        <value>Select All</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeselectAll</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deselect all agents button</shortDescription>
+        <value>Deselect All</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableName</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Name table column header</shortDescription>
+        <value>Name</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableEmail</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Email table column header</shortDescription>
+        <value>Email</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableProfile</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Profile table column header</shortDescription>
+        <value>Profile</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableStatus</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Status table column header</shortDescription>
+        <value>Status</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSelectUser</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Select user checkbox label</shortDescription>
+        <value>Select user</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Step 5 ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardSimulate</fullName>
@@ -333,6 +1333,14 @@
         <protected>true</protected>
         <shortDescription>Sample record ID help text</shortDescription>
         <value>Enter the ID of an existing record to test your routing configuration. No changes will be made.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRecordIdPlaceholder</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Record ID input placeholder</shortDescription>
+        <value>e.g. 500xx0000001234</value>
     </labels>
 
     <labels>
@@ -383,7 +1391,95 @@
         <value>Running simulation</value>
     </labels>
 
-    <!-- ── Setup Wizard: Shared ───────────────────────────────────────── -->
+    <labels>
+        <fullName>URE_WizardSimMatchFound</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Simulation match found message</shortDescription>
+        <value>Match Found</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSimNoMatch</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Simulation no match message</shortDescription>
+        <value>No Match</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableField</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Field column header in trace table</shortDescription>
+        <value>Field</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableOperator</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Operator column header in trace table</shortDescription>
+        <value>Operator</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableExpected</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Expected column header in trace table</shortDescription>
+        <value>Expected</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableActual</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Actual column header in trace table</shortDescription>
+        <value>Actual</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardTableResult</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Result column header in trace table</shortDescription>
+        <value>Result</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardActivateTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Activate configuration section title</shortDescription>
+        <value>Activate Configuration</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardActivateDesc</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Activate configuration description</shortDescription>
+        <value>Deploy this routing configuration to your org. Custom metadata records will be created and agent records will be set up.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardConfigSummaryTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Configuration summary section title</shortDescription>
+        <value>Configuration Summary</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardSampleRecordError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Error when sample record ID is empty</shortDescription>
+        <value>Please enter a sample record ID.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Shared ══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_WizardRequired</fullName>
@@ -401,163 +1497,7 @@
         <value>Step {0} of {1}</value>
     </labels>
 
-    <!-- ── Agent Work Panel: Section Titles ─────────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelTitle</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Agent Work Panel card title</shortDescription>
-        <value>My Work</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelQueueDepth</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Queue depth badge label</shortDescription>
-        <value>In Queue</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelCurrentLoad</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Current load indicator label</shortDescription>
-        <value>My Load</value>
-    </labels>
-
-    <!-- ── Agent Work Panel: Buttons ─────────────────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelDefer</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Defer work button label</shortDescription>
-        <value>Defer</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelDeferring</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Button label while defer in progress</shortDescription>
-        <value>Deferring...</value>
-    </labels>
-
-    <!-- ── Agent Work Panel: Status ──────────────────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelOnline</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Agent Online status label</shortDescription>
-        <value>Online</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelBusy</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Agent Busy status label</shortDescription>
-        <value>Busy</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelAway</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Agent Away status label</shortDescription>
-        <value>Away</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelOffline</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Agent Offline status label</shortDescription>
-        <value>Offline</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelStatusLabel</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Status toggle section label</shortDescription>
-        <value>Availability</value>
-    </labels>
-
-    <!-- ── Agent Work Panel: SLA ─────────────────────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelSlaRemaining</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>SLA time remaining label</shortDescription>
-        <value>SLA Remaining</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelSlaExpired</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>SLA expired message</shortDescription>
-        <value>SLA Expired</value>
-    </labels>
-
-    <!-- ── Agent Work Panel: Empty / Error States ─────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelEmptyTitle</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Empty state heading when no work assigned</shortDescription>
-        <value>No Work Assigned</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelEmptyBody</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Empty state body text</shortDescription>
-        <value>Click Next Best Action to pull your next work item.</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelDeferSuccess</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Toast title after successful defer</shortDescription>
-        <value>Work Deferred</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelDeferError</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Toast title for defer failures</shortDescription>
-        <value>Defer Failed</value>
-    </labels>
-
-    <labels>
-        <fullName>URE_WorkPanelNoAgent</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Error when no Agent record found</shortDescription>
-        <value>No agent record found for your user. Contact your administrator.</value>
-    </labels>
-
-    <!-- ── Agent Work Panel: Accessibility ─────────────────────────────── -->
-
-    <labels>
-        <fullName>URE_WorkPanelLoadingWork</fullName>
-        <language>en_US</language>
-        <protected>true</protected>
-        <shortDescription>Spinner alt text while fetching work</shortDescription>
-        <value>Finding next work item</value>
-    </labels>
-
-    <!-- ── Analytics Dashboard ──────────────────────────────────────── -->
+    <!-- ══ Analytics Dashboard ═══════════════════════════════════════ -->
 
     <labels>
         <fullName>URE_AnalyticsDashboardTitle</fullName>
@@ -702,6 +1642,146 @@
         <protected>true</protected>
         <shortDescription>Milliseconds unit abbreviation</shortDescription>
         <value>ms</value>
+    </labels>
+    <labels>
+        <fullName>URE_AnalyticsDateHeader</fullName>
+        <categories>AnalyticsDashboard</categories>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Date column header in analytics table</shortDescription>
+        <value>Date</value>
+    </labels>
+
+    <!-- ══ Retry Lock Handler: Error Messages ══════════════════════ -->
+
+    <labels>
+        <fullName>URE_LOCK_RECORD_GONE</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Record vanished between query and lock</shortDescription>
+        <value>Record no longer exists or is not visible to the running user.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_LOCK_EXHAUSTED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Lock retries exhausted with count placeholder</shortDescription>
+        <value>Lock contention: exhausted {0} retry attempts.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard Step 4: Error Messages ═══════════════════════ -->
+
+    <labels>
+        <fullName>URE_WizardLoadUsersFailed</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback error when user search fails</shortDescription>
+        <value>Failed to load users.</value>
+    </labels>
+
+    <!-- ══ Assignment Resolver: Error Messages ═══════════════════════ -->
+
+    <labels>
+        <fullName>URE_RESOLVER_NO_MATCH</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>No matching candidates found by resolver</shortDescription>
+        <value>No matching candidates found.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_RESOLVER_CAPACITY_EXCEEDED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Agent per-config capacity exceeded</shortDescription>
+        <value>Agent has reached the per-config capacity (Max_Capacity__c) for this object type.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_RESOLVER_LOCK_EXHAUSTED</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Lock contention with retry/candidate count</shortDescription>
+        <value>Lock contention: unable to acquire lock after {0} attempts across {1} candidates.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_RESOLVER_UNKNOWN_DML_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback when DML error list is empty</shortDescription>
+        <value>Unknown DML error.</value>
+    </labels>
+
+    <!-- ══ Shared: Fallback Error Messages ═══════════════════════════ -->
+
+    <labels>
+        <fullName>URE_UNKNOWN_ERROR</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Generic unknown error fallback</shortDescription>
+        <value>Unknown error.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard: Toast Messages ══════════════════════════════ -->
+
+    <labels>
+        <fullName>URE_WizardConfigActivated</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Toast message after successful activation</shortDescription>
+        <value>Configuration activated.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardRequiredFields</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Validation warning for incomplete fields</shortDescription>
+        <value>Please complete all required fields before proceeding.</value>
+    </labels>
+
+    <!-- ══ Setup Wizard Step 5: Error Messages ═══════════════════════ -->
+
+    <labels>
+        <fullName>URE_WizardSimulationFailed</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback error when simulation fails</shortDescription>
+        <value>Simulation failed.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeployStartFailed</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback error when deployment fails to start</shortDescription>
+        <value>Deployment failed to start.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeployError</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Fallback error during deployment</shortDescription>
+        <value>Deployment failed.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeployTimeout</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deployment polling timeout message</shortDescription>
+        <value>Deployment polling timed out. Check Setup &gt; Deployment Status.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WizardDeployConnectionLost</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Connection lost during deployment polling</shortDescription>
+        <value>Lost connection to deployment.</value>
     </labels>
 
 </CustomLabels>
