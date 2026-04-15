@@ -47,6 +47,8 @@
 import { LightningElement, api, track, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { getObjectInfo } from 'lightning/uiObjectInfoApi';
+import { IsConsoleNavigation, openTab } from 'lightning/platformWorkspaceApi';
 import { refreshApex } from '@salesforce/apex';
 
 // ── Apex Methods ────────────────────────────────────────────────────────────
@@ -78,6 +80,8 @@ import LABEL_DEFER_SUCCESS from '@salesforce/label/c.URE_WorkPanelDeferSuccess';
 import LABEL_DEFER_ERROR from '@salesforce/label/c.URE_WorkPanelDeferError';
 import LABEL_ROUTING_ERROR from '@salesforce/label/c.URE_RoutingError';
 import LABEL_RECORD_ASSIGNED from '@salesforce/label/c.URE_RecordAssigned';
+import LABEL_ASSIGNMENT_SUCCESS_TITLE from '@salesforce/label/c.URE_AssignmentSuccessTitle';
+import LABEL_ASSIGNMENT_SUCCESS_MESSAGE from '@salesforce/label/c.URE_AssignmentSuccessMessage';
 import LABEL_NO_RECORDS from '@salesforce/label/c.URE_NoRecordsAvailable';
 import LABEL_UNEXPECTED_ERROR from '@salesforce/label/c.URE_UnexpectedError';
 import LABEL_LOADING_WORK from '@salesforce/label/c.URE_WorkPanelLoadingWork';
@@ -113,6 +117,8 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         deferError: LABEL_DEFER_ERROR,
         routingError: LABEL_ROUTING_ERROR,
         recordAssigned: LABEL_RECORD_ASSIGNED,
+        assignmentSuccessTitle: LABEL_ASSIGNMENT_SUCCESS_TITLE,
+        assignmentSuccessMessage: LABEL_ASSIGNMENT_SUCCESS_MESSAGE,
         noRecords: LABEL_NO_RECORDS,
         unexpectedError: LABEL_UNEXPECTED_ERROR,
         loadingWork: LABEL_LOADING_WORK,
@@ -147,6 +153,22 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     recordUrl = null;
     isRouting = false;
     isDeferring = false;
+
+    // ─── Assignment success banner: reactive object-label resolution ────
+    /** @type {string|null} Reactive SObject API name driving getObjectInfo */
+    @track assignedObjectApiName = null;
+    /** @type {string|null} Translated object label (e.g. "Case") */
+    assignedObjectLabel = null;
+
+    @wire(getObjectInfo, { objectApiName: '$assignedObjectApiName' })
+    wiredAssignedObjectInfo({ data }) {
+        if (data && data.label) {
+            this.assignedObjectLabel = data.label;
+        }
+    }
+
+    /** @type {boolean} True when hosted in a Console app — enables openTab */
+    @wire(IsConsoleNavigation) isConsoleNavigation;
 
     // ─── Queue depth ────────────────────────────────────────────────────
     // Populated by the @wire(getQueueDepth) binding below — never set
@@ -377,11 +399,11 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                 this._generateRecordUrl(result.recordId);
                 this._startSlaCountdown(result.slaDeadline);
 
-                this.dispatchEvent(new ShowToastEvent({
-                    title: this.label.recordAssigned,
-                    message: result.recordName || result.recordId,
-                    variant: 'success'
-                }));
+                // Trigger getObjectInfo to resolve the translated object label
+                this.assignedObjectApiName = result.objectApiName || null;
+
+                this._fireAssignmentSuccessBanner(result);
+                this._openAssignedRecord(result.recordId);
 
                 // Refresh agent context (load changed) and queue depth.
                 // refreshApex on both wires invalidates the LDS cache and
@@ -474,6 +496,58 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    /**
+     * @description Builds and dispatches the "Assignment Successful" sticky
+     *              banner. Fires in BOTH Console and Standard apps — the only
+     *              branch is which navigation API we use afterwards. Sticky
+     *              mode forces the agent to acknowledge, preventing missed
+     *              assignments during high-volume routing.
+     */
+    _fireAssignmentSuccessBanner(result) {
+        const objectDisplay = this.assignedObjectLabel
+            || result.objectApiName
+            || '';
+        const recordDisplay = result.recordName || result.recordId || '';
+
+        const message = this.label.assignmentSuccessMessage
+            .replace('{0}', objectDisplay)
+            .replace('{1}', recordDisplay)
+            .trim();
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: this.label.assignmentSuccessTitle,
+            message: message,
+            variant: 'success',
+            mode: 'pester'
+        }));
+    }
+
+    /**
+     * @description Opens the assigned record for the agent. Runtime-aware:
+     *              in a Console app it opens a focused workspace subtab via
+     *              platformWorkspaceApi.openTab; in a Standard Lightning app
+     *              it navigates via NavigationMixin. Either path, the sticky
+     *              banner has already fired so the agent is always informed.
+     */
+    async _openAssignedRecord(recordId) {
+        if (!recordId) return;
+        if (this.isConsoleNavigation) {
+            try {
+                await openTab({ recordId, focus: true });
+                return;
+            } catch (err) {
+                // fall through to standard navigation
+            }
+        }
+        this[NavigationMixin.Navigate]({
+            type: 'standard__recordPage',
+            attributes: {
+                recordId: recordId,
+                actionName: 'view'
+            }
+        });
+    }
 
     /**
      * @description Generates a Lightning URL for the record link.

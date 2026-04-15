@@ -192,6 +192,8 @@ public with sharing class WorkItemReaper {
     ) {
         String objectApiName = cfg.Object_API_Name__c;
         String closedField   = cfg.Closed_Status_Field_API_Name__c;
+        String ownerField    = String.isNotBlank(cfg.Owner_Field_API_Name__c)
+            ? cfg.Owner_Field_API_Name__c : 'OwnerId';
 
         // Parse closed values for this config
         Set<String> closedValues = new Set<String>();
@@ -204,11 +206,20 @@ public with sharing class WorkItemReaper {
             }
         }
 
-        // Collect record Ids (skip malformed)
+        // Collect record Ids (skip malformed) and map recordId → expected User Id
+        // (the User we assigned to the agent). Used below to detect records whose
+        // OwnerId has been manually reassigned away from the agent (e.g. sent back
+        // to a queue or integration user) — those work items are zombies and their
+        // capacity must be freed.
         Set<Id> recIdSet = new Set<Id>();
+        Map<Id, Id> expectedOwnerByRecord = new Map<Id, Id>();
         for (Agent_Work_Item__c item : configItems) {
             try {
-                recIdSet.add(Id.valueOf(item.Record_Id__c));
+                Id rid = Id.valueOf(item.Record_Id__c);
+                recIdSet.add(rid);
+                if (item.Agent__r != null && item.Agent__r.User__c != null) {
+                    expectedOwnerByRecord.put(rid, item.Agent__r.User__c);
+                }
             } catch (Exception ex) {
                 // malformed — skip
             }
@@ -237,10 +248,19 @@ public with sharing class WorkItemReaper {
             && !closedValues.isEmpty()
             && fieldMap.containsKey(closedField.toLowerCase());
 
+        Boolean canEvalOwner =
+               fieldMap.containsKey(ownerField.toLowerCase())
+            && !expectedOwnerByRecord.isEmpty();
+
         // ── Query source records (1 SOQL) ───────────────────────────────
-        String selectList = canEvalClosed
-            ? ('Id, ' + closedField)
-            : 'Id';
+        List<String> selectFields = new List<String>{ 'Id' };
+        if (canEvalClosed) {
+            selectFields.add(closedField);
+        }
+        if (canEvalOwner) {
+            selectFields.add(ownerField);
+        }
+        String selectList = String.join(selectFields, ', ');
         String soql = 'SELECT ' + selectList
                     + ' FROM '  + objectApiName
                     + ' WHERE Id IN :recIdSet';
@@ -274,16 +294,27 @@ public with sharing class WorkItemReaper {
                 continue;
             }
 
-            // Closure detection disabled for this config → leave it
-            if (!canEvalClosed) {
-                continue;
+            // Source record closed → reap
+            if (canEvalClosed) {
+                Object statusVal = rec.get(closedField);
+                if (statusVal != null
+                    && closedValues.contains(String.valueOf(statusVal))) {
+                    recordIdsToComplete.add(String.valueOf(recId));
+                    continue;
+                }
             }
 
-            // Source record in closed status → reap
-            Object statusVal = rec.get(closedField);
-            if (statusVal != null
-                && closedValues.contains(String.valueOf(statusVal))) {
-                recordIdsToComplete.add(String.valueOf(recId));
+            // Ownership moved away from the agent (manual re-queue, escalation
+            // return to integration user / queue, manual re-assign) → reap so
+            // the agent's Current_Load__c is decremented on next sync.
+            if (canEvalOwner) {
+                Id expectedUserId = expectedOwnerByRecord.get(recId);
+                Object currentOwner = rec.get(ownerField);
+                if (expectedUserId != null
+                    && currentOwner != null
+                    && String.valueOf(currentOwner) != String.valueOf(expectedUserId)) {
+                    recordIdsToComplete.add(String.valueOf(recId));
+                }
             }
         }
     }

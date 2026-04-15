@@ -38,6 +38,22 @@
     </labels>
 
     <labels>
+        <fullName>URE_AssignmentSuccessTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Success banner title when a record is assigned to the agent</shortDescription>
+        <value>Assignment Successful</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_AssignmentSuccessMessage</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Success banner body. {0}=object label, {1}=record name.</shortDescription>
+        <value>{0} {1} has been successfully assigned to you.</value>
+    </labels>
+
+    <labels>
         <fullName>URE_RoutingError</fullName>
         <language>en_US</language>
         <protected>true</protected>

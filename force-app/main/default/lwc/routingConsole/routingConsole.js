@@ -14,9 +14,11 @@
  *
  * @group UI
  */
-import { LightningElement } from 'lwc';
+import { LightningElement, wire } from 'lwc';
 import { NavigationMixin } from 'lightning/navigation';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { getObjectInfo } from 'lightning/uiObjectInfoApi';
+import { IsConsoleNavigation, openTab } from 'lightning/platformWorkspaceApi';
 import getNextRecord from '@salesforce/apex/RoutingService.getNextRecord';
 
 // ── Custom Labels (i18n) ─────────────────────────────────────────────────────
@@ -24,6 +26,8 @@ import LABEL_NEXT_BEST_ACTION from '@salesforce/label/c.URE_NextBestAction';
 import LABEL_ROUTING from '@salesforce/label/c.URE_Routing';
 import LABEL_ASSIGNED from '@salesforce/label/c.URE_Assigned';
 import LABEL_RECORD_ASSIGNED from '@salesforce/label/c.URE_RecordAssigned';
+import LABEL_ASSIGNMENT_SUCCESS_TITLE from '@salesforce/label/c.URE_AssignmentSuccessTitle';
+import LABEL_ASSIGNMENT_SUCCESS_MESSAGE from '@salesforce/label/c.URE_AssignmentSuccessMessage';
 import LABEL_ROUTING_ERROR from '@salesforce/label/c.URE_RoutingError';
 import LABEL_NO_RECORDS from '@salesforce/label/c.URE_NoRecordsAvailable';
 import LABEL_UNEXPECTED_ERROR from '@salesforce/label/c.URE_UnexpectedError';
@@ -37,6 +41,8 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
         routing: LABEL_ROUTING,
         assigned: LABEL_ASSIGNED,
         recordAssigned: LABEL_RECORD_ASSIGNED,
+        assignmentSuccessTitle: LABEL_ASSIGNMENT_SUCCESS_TITLE,
+        assignmentSuccessMessage: LABEL_ASSIGNMENT_SUCCESS_MESSAGE,
         routingError: LABEL_ROUTING_ERROR,
         noRecords: LABEL_NO_RECORDS,
         unexpectedError: LABEL_UNEXPECTED_ERROR,
@@ -51,6 +57,27 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
 
     /** @type {string|null} Generated Lightning URL for the assigned record */
     recordUrl = null;
+
+    /** @type {string|null} Reactive object API name used by getObjectInfo wire */
+    assignedObjectApiName = null;
+
+    /** @type {string|null} Display label for the assigned object (e.g. "Case") */
+    assignedObjectLabel = null;
+
+    /**
+     * @description Resolves the user-facing label for the assigned SObject
+     *              (respects translations / org renames). Falls back silently
+     *              to the API name if metadata is unavailable.
+     */
+    @wire(getObjectInfo, { objectApiName: '$assignedObjectApiName' })
+    wiredObjectInfo({ data }) {
+        if (data && data.label) {
+            this.assignedObjectLabel = data.label;
+        }
+    }
+
+    /** @type {boolean} True when hosted inside a Console app (enables openTab) */
+    @wire(IsConsoleNavigation) isConsoleNavigation;
 
     // ─── Computed Properties ────────────────────────────────────────────
 
@@ -108,6 +135,9 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
             this.lastResult = result;
 
             if (result.success) {
+                // Trigger getObjectInfo wire to resolve the translated object label
+                this.assignedObjectApiName = result.objectApiName || null;
+
                 // Generate Lightning URL for the assigned record
                 this[NavigationMixin.GenerateUrl]({
                     type: 'standard__recordPage',
@@ -119,11 +149,8 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
                     this.recordUrl = url;
                 });
 
-                this.dispatchEvent(new ShowToastEvent({
-                    title: this.label.recordAssigned,
-                    message: result.recordName || result.recordId,
-                    variant: 'success'
-                }));
+                this.fireAssignmentSuccessBanner(result);
+                this.openAssignedRecord(result.recordId);
             }
         } catch (error) {
             // Network-level or unhandled Apex exception
@@ -139,6 +166,59 @@ export default class RoutingConsole extends NavigationMixin(LightningElement) {
         } finally {
             this.isLoading = false;
         }
+    }
+
+    /**
+     * @description Builds and dispatches the "Assignment Successful" success
+     *              banner. Uses the translated SObject label (from getObjectInfo)
+     *              when available, falling back to the API name. Mode 'sticky'
+     *              so the agent must acknowledge — prevents missed assignments
+     *              during high-volume routing.
+     */
+    fireAssignmentSuccessBanner(result) {
+        const objectDisplay = this.assignedObjectLabel
+            || result.objectApiName
+            || '';
+        const recordDisplay = result.recordName || result.recordId || '';
+
+        const message = this.label.assignmentSuccessMessage
+            .replace('{0}', objectDisplay)
+            .replace('{1}', recordDisplay)
+            .trim();
+
+        this.dispatchEvent(new ShowToastEvent({
+            title: this.label.assignmentSuccessTitle,
+            message: message,
+            variant: 'success',
+            mode: 'pester'
+        }));
+    }
+
+    /**
+     * @description Opens the assigned record. In a Console app this opens a
+     *              focused workspace tab via platformWorkspaceApi.openTab. In a
+     *              standard app (or if the workspace API rejects) it falls back
+     *              to NavigationMixin.Navigate.
+     */
+    async openAssignedRecord(recordId) {
+        if (!recordId) {
+            return;
+        }
+        if (this.isConsoleNavigation) {
+            try {
+                await openTab({ recordId, focus: true });
+                return;
+            } catch (err) {
+                // fall through to standard navigation
+            }
+        }
+        this[NavigationMixin.Navigate]({
+            type: 'standard__recordPage',
+            attributes: {
+                recordId: recordId,
+                actionName: 'view'
+            }
+        });
     }
 
     /**
