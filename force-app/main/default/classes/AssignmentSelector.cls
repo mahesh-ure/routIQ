@@ -25,7 +25,50 @@ public with sharing class AssignmentSelector {
     @TestVisible
     private static String mockRecordName;
 
+    @TestVisible
+    private static List<Agent_Work_Item__c> mockActiveWorkItems;
+
     // ─── Public API ────────────────────────────────────────────────────────────
+
+    /**
+     * @description Returns the running agent's ACTIVE work items — the authoritative
+     *              ledger of what is currently assigned (routIQ's internal source of
+     *              truth for Current_Load__c). Used by the Agent Work Panel to
+     *              hydrate pre-existing assignments across sessions / inbound
+     *              integrations / reaper actions. Object-agnostic — downstream
+     *              logic bulk-loads record names and SLA deadlines per object.
+     *
+     *              Ordered by Assigned_At__c ASC so the oldest work surfaces first
+     *              (natural urgency ordering when SLA is not configured).
+     *
+     *              Cost: 1 SOQL. USER_MODE enforces FLS/CRUD.
+     *
+     * @param agentId Agent__c Id of the running user (resolved via UserInfo upstream)
+     * @return Active work items (may be empty). Never null.
+     */
+    public static List<Agent_Work_Item__c> getActiveWorkItemsForAgent(Id agentId) {
+        if (Test.isRunningTest() && mockActiveWorkItems != null) {
+            return mockActiveWorkItems;
+        }
+        if (agentId == null) {
+            return new List<Agent_Work_Item__c>();
+        }
+        return [
+            SELECT Id,
+                   Agent__c,
+                   Record_Id__c,
+                   Object_API_Name__c,
+                   Config_Developer_Name__c,
+                   Assigned_At__c,
+                   Status__c
+            FROM   Agent_Work_Item__c
+            WHERE  Agent__c = :agentId
+            AND    Status__c = 'Active'
+            WITH   USER_MODE
+            ORDER BY Assigned_At__c ASC
+            LIMIT  200
+        ];
+    }
 
     /**
      * @description Acquires a pessimistic row lock on a single candidate record

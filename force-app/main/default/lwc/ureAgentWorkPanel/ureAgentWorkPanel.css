@@ -71,6 +71,17 @@
 
 .work-card {
     border-left: 4px solid #0176d3;
+    transition: border-left-color 0.2s ease-in-out;
+}
+
+/* Tint the card's left border to match the item's SLA state when present.
+   :has() lets the parent react to the inner state class without any JS. */
+.work-card:has(.sla-amber) {
+    border-left-color: #fe9339;
+}
+
+.work-card:has(.sla-red) {
+    border-left-color: #ea001e;
 }
 
 /* ── SLA Countdown Colours ───────────────────────────────────────────────── */

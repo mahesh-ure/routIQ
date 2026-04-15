@@ -7,6 +7,7 @@
 
 # LWC Jest
 **/__tests__/**
+force-app/test/
 
 # Claude / AI config
 .claude/

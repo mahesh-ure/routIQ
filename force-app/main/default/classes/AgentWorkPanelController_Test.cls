@@ -48,6 +48,9 @@ private class AgentWorkPanelController_Test {
             Owner_Field_API_Name__c = 'OwnerId',
             Active__c = true,
             SLA_Deadline_Field__c = 'SlaExitDate',
+            SLA_Minutes__c = 60,
+            SLA_Warn_Threshold_Pct__c = 40,
+            SLA_Critical_Threshold_Pct__c = 10,
             Defer_Reset_Field__c = 'OwnerId',
             Defer_Reset_Value__c = null,
             Candidate_Limit__c = 50,
@@ -428,6 +431,188 @@ private class AgentWorkPanelController_Test {
         // Count may include other Cases in the org, but closed ones should not be counted
         System.assert(count >= 3,
             'Queue depth should count at least the 3 open Cases');
+    }
+
+    // =========================================================================
+    // 5. getAssignedWork TESTS — pre-existing assignments + SLA thresholds
+    // =========================================================================
+
+    @IsTest
+    static void getAssignedWork_noItems_returnsEmptyList() {
+        injectMockConfig();
+
+        Test.startTest();
+        List<AgentWorkPanelController.WorkAssignment> result =
+            AgentWorkPanelController.getAssignedWork();
+        Test.stopTest();
+
+        System.assertNotEquals(null, result, 'Result must never be null');
+        System.assertEquals(0, result.size(),
+            'With no active work items, list should be empty (not null)');
+    }
+
+    @IsTest
+    static void getAssignedWork_noAgent_throwsException() {
+        delete [SELECT Id FROM Agent__c];
+
+        Boolean thrown = false;
+        Test.startTest();
+        try {
+            AgentWorkPanelController.getAssignedWork();
+        } catch (AuraHandledException e) {
+            thrown = true;
+        }
+        Test.stopTest();
+
+        System.assert(thrown,
+            'getAssignedWork must surface the no-agent exception from loadAgentContext');
+    }
+
+    @IsTest
+    static void getAssignedWork_activeItems_returnsEnrichedDtosWithThresholds() {
+        injectMockConfig();
+
+        Agent__c agent = [SELECT Id FROM Agent__c LIMIT 1];
+
+        Case c = new Case(Subject = 'GAP Active 1', Status = 'New');
+        insert c;
+
+        Agent_Work_Item__c item = new Agent_Work_Item__c(
+            Agent__c                 = agent.Id,
+            Record_Id__c             = String.valueOf(c.Id),
+            Object_API_Name__c       = 'Case',
+            Config_Developer_Name__c = CONFIG_DEV_NAME,
+            Assigned_At__c           = System.now(),
+            Status__c                = 'Active'
+        );
+        insert item;
+
+        Test.startTest();
+        List<AgentWorkPanelController.WorkAssignment> result =
+            AgentWorkPanelController.getAssignedWork();
+        Test.stopTest();
+
+        System.assertEquals(1, result.size(), 'One active item should hydrate');
+        AgentWorkPanelController.WorkAssignment wa = result[0];
+
+        System.assertEquals(c.Id, wa.recordId, 'Record Id must match');
+        System.assertEquals('Case', wa.objectApiName, 'Object must be Case');
+        System.assertEquals(CONFIG_DEV_NAME, wa.configDevName, 'Config must match');
+        System.assertEquals(40, wa.slaWarnPct,
+            'Warn threshold must come from CMDT (40%)');
+        System.assertEquals(10, wa.slaCriticalPct,
+            'Critical threshold must come from CMDT (10%)');
+        System.assertNotEquals(null, wa.assignedAt,
+            'assignedAt must flow through to the DTO');
+        System.assertNotEquals(null, wa.slaDeadline,
+            'SLA deadline must populate via SLA_Minutes__c fallback '
+            + '(Case has no SlaExitDate in test context)');
+    }
+
+    @IsTest
+    static void getAssignedWork_skipsCompletedItems() {
+        injectMockConfig();
+
+        Agent__c agent = [SELECT Id FROM Agent__c LIMIT 1];
+        Case c = new Case(Subject = 'GAP Completed', Status = 'New');
+        insert c;
+
+        insert new Agent_Work_Item__c(
+            Agent__c                 = agent.Id,
+            Record_Id__c             = String.valueOf(c.Id),
+            Object_API_Name__c       = 'Case',
+            Config_Developer_Name__c = CONFIG_DEV_NAME,
+            Assigned_At__c           = System.now(),
+            Status__c                = 'Completed'
+        );
+
+        Test.startTest();
+        List<AgentWorkPanelController.WorkAssignment> result =
+            AgentWorkPanelController.getAssignedWork();
+        Test.stopTest();
+
+        System.assertEquals(0, result.size(),
+            'Completed items must NOT appear in the active-work list');
+    }
+
+    @IsTest
+    static void getAssignedWork_invertedThresholds_fallBackToSafetyNet() {
+        // CMDT misconfiguration: Warn <= Critical violates the invariant.
+        // Controller must fall back to 50/20 rather than silently drawing everything red.
+        Routing_Config__mdt bad = buildMockConfig();
+        bad.SLA_Warn_Threshold_Pct__c     = 10;
+        bad.SLA_Critical_Threshold_Pct__c = 30;
+        RoutingConfigSelector.mockConfigs = new Map<String, Routing_Config__mdt>{
+            CONFIG_DEV_NAME => bad
+        };
+
+        Agent__c agent = [SELECT Id FROM Agent__c LIMIT 1];
+        Case c = new Case(Subject = 'GAP Invalid Threshold', Status = 'New');
+        insert c;
+
+        insert new Agent_Work_Item__c(
+            Agent__c                 = agent.Id,
+            Record_Id__c             = String.valueOf(c.Id),
+            Object_API_Name__c       = 'Case',
+            Config_Developer_Name__c = CONFIG_DEV_NAME,
+            Assigned_At__c           = System.now(),
+            Status__c                = 'Active'
+        );
+
+        Test.startTest();
+        List<AgentWorkPanelController.WorkAssignment> result =
+            AgentWorkPanelController.getAssignedWork();
+        Test.stopTest();
+
+        System.assertEquals(1, result.size(), 'One row expected');
+        System.assertEquals(50, result[0].slaWarnPct,
+            'Invariant violation must fall back to FALLBACK_SLA_WARN_PCT (50)');
+        System.assertEquals(20, result[0].slaCriticalPct,
+            'Invariant violation must fall back to FALLBACK_SLA_CRITICAL_PCT (20)');
+    }
+
+    @IsTest
+    static void getAssignedWork_multipleObjects_bulkLoadsWithoutN1() {
+        // Two active items across two distinct objects. Selector is 1 SOQL,
+        // bulkLoad should then hit each object ONCE (not once per record).
+        injectMockConfig();
+
+        Agent__c agent = [SELECT Id FROM Agent__c LIMIT 1];
+
+        List<Case> cases = new List<Case>{
+            new Case(Subject = 'Bulk 1', Status = 'New'),
+            new Case(Subject = 'Bulk 2', Status = 'New'),
+            new Case(Subject = 'Bulk 3', Status = 'New')
+        };
+        insert cases;
+
+        List<Agent_Work_Item__c> items = new List<Agent_Work_Item__c>();
+        for (Case c : cases) {
+            items.add(new Agent_Work_Item__c(
+                Agent__c                 = agent.Id,
+                Record_Id__c             = String.valueOf(c.Id),
+                Object_API_Name__c       = 'Case',
+                Config_Developer_Name__c = CONFIG_DEV_NAME,
+                Assigned_At__c           = System.now(),
+                Status__c                = 'Active'
+            ));
+        }
+        insert items;
+
+        Test.startTest();
+        Integer soqlBefore = Limits.getQueries();
+        List<AgentWorkPanelController.WorkAssignment> result =
+            AgentWorkPanelController.getAssignedWork();
+        Integer soqlUsed = Limits.getQueries() - soqlBefore;
+        Test.stopTest();
+
+        System.assertEquals(3, result.size(), 'Three active items expected');
+        // 1 SOQL for agent-context, 1 SOQL for work items, 1 SOQL for Case
+        // bulk load (same object, deduped). Allow headroom but assert it
+        // scales with distinct objects, NOT with row count.
+        System.assert(soqlUsed <= 5,
+            'Expected ≤ 5 SOQL for 3 items on a single object (bulk invariant). '
+            + 'Actual: ' + soqlUsed);
     }
 
     // =========================================================================

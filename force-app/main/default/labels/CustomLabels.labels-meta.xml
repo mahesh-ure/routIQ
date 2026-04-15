@@ -318,6 +318,22 @@
     </labels>
 
     <labels>
+        <fullName>URE_WorkPanelAssignedHeader</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Section heading above the list of active work items</shortDescription>
+        <value>Your Assigned Work</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelItemCount</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Item count shown next to the assigned-work header. Token {0} = count</shortDescription>
+        <value>{0} item(s)</value>
+    </labels>
+
+    <labels>
         <fullName>URE_WorkPanelDeferSuccess</fullName>
         <language>en_US</language>
         <protected>true</protected>

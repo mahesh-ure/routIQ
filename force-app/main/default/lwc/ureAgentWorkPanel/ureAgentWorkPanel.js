@@ -2,45 +2,41 @@
  * @description Layer 5 -- Agent Work Panel LWC. Primary agent-facing component
  *              for the pull-model routing workflow:
  *
- *              Get Work -> View SLA Countdown -> Defer (or complete)
+ *              Hydrate Assigned Work -> Next Best Action -> SLA Countdown -> Defer
  *
  *              Features:
  *              - Availability toggle (Online/Busy/Away/Offline)
  *              - Next Best Action button (delegates to RoutingService)
- *              - SLA countdown timer (JS-only, zero server calls per tick)
- *              - Defer button (resets configured field, publishes DEFERRED event)
+ *              - Multi-item work list (all active Agent_Work_Item__c rows)
+ *              - Per-item SLA countdown with admin-tunable colour thresholds
+ *                (Routing_Config__mdt.SLA_Warn_Threshold_Pct__c /
+ *                SLA_Critical_Threshold_Pct__c — fallbacks 50/20)
+ *              - Per-item Defer button
  *              - Queue depth indicator (wired, reactive on configDevName)
  *              - Current load / capacity display
  *              - 10s auto-refresh tick that runs the WorkItemReaper server-side
  *                so Current Load drops as soon as the agent closes a record
  *
- *              Server interactions (split by purpose, NOT consolidated):
+ *              Server interactions (split by purpose):
  *
  *              READS (cacheable, @wire-bound, LDS-cached):
- *                - getAgentContext  → wiredAgent  (initial agent state)
- *                - getQueueDepth    → wiredQueue  (reactive on $configDevName,
- *                                                  falls back to all-active
- *                                                  configs when blank)
+ *                - getAgentContext   → wiredAgent  (initial agent state)
+ *                - getAssignedWork   → wiredAssigned (hydrate pre-existing
+ *                                                     work items on load)
+ *                - getQueueDepth     → wiredQueue  (reactive on $configDevName)
  *
  *              READ + SELF-HEAL (non-cacheable, runs DML via reaper):
- *                - refreshAgentContext  (10s tick — reaps zombie work items
- *                                        then returns fresh AgentContext)
+ *                - refreshAgentContext  (10s tick)
  *
  *              MUTATIONS (non-cacheable, imperative):
  *                - getNextWork          (route + assign + publish PE)
  *                - deferWork            (reset field + delete work item + PE)
  *                - updateAgentStatus    (availability toggle)
  *
- *              The split exists because Salesforce forbids DML inside
- *              cacheable=true methods, and @wire only accepts cacheable
- *              methods. So mutations + reaper-driven refresh stay imperative.
- *
  *              Design:
  *              - All text via Custom Labels (i18n)
  *              - No lwc:dom="manual", no innerHTML (XSS-safe)
- *              - configDevName is @api so admins can bind the panel to a
- *                specific config from App Builder; blank works out-of-box
- *              - connectedCallback / disconnectedCallback for timer lifecycle
+ *              - Thresholds come from server DTO — no hardcoded 50/20 in JS
  *
  * @group UI
  */
@@ -53,6 +49,7 @@ import { refreshApex } from '@salesforce/apex';
 
 // ── Apex Methods ────────────────────────────────────────────────────────────
 import getAgentContext from '@salesforce/apex/AgentWorkPanelController.getAgentContext';
+import getAssignedWork from '@salesforce/apex/AgentWorkPanelController.getAssignedWork';
 import refreshAgentContext from '@salesforce/apex/AgentWorkPanelController.refreshAgentContext';
 import getNextWork from '@salesforce/apex/AgentWorkPanelController.getNextWork';
 import deferWork from '@salesforce/apex/AgentWorkPanelController.deferWork';
@@ -86,16 +83,19 @@ import LABEL_NO_RECORDS from '@salesforce/label/c.URE_NoRecordsAvailable';
 import LABEL_UNEXPECTED_ERROR from '@salesforce/label/c.URE_UnexpectedError';
 import LABEL_LOADING_WORK from '@salesforce/label/c.URE_WorkPanelLoadingWork';
 import LABEL_ASSIGNED from '@salesforce/label/c.URE_Assigned';
+import LABEL_ASSIGNED_HEADER from '@salesforce/label/c.URE_WorkPanelAssignedHeader';
+import LABEL_ITEM_COUNT from '@salesforce/label/c.URE_WorkPanelItemCount';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-// Auto-refresh interval for agent context + queue depth (client-side only).
-// Picked at 10s to keep the load/capacity counters in sync with reaper /
-// other agents' actions without flooding Apex.
 const AUTO_REFRESH_MS = 10000;
+// Safety-net thresholds — apply ONLY when the server DTO omits a per-item
+// value (which itself already falls back to Routing_Config__mdt fields +
+// controller FALLBACK_* constants). Keep in sync with AgentWorkPanelController.
+const FALLBACK_WARN_PCT = 50;
+const FALLBACK_CRITICAL_PCT = 20;
 
 export default class UreAgentWorkPanel extends NavigationMixin(LightningElement) {
 
-    // ─── Labels exposed to template ─────────────────────────────────────
     label = {
         title: LABEL_TITLE,
         queueDepth: LABEL_QUEUE_DEPTH,
@@ -122,25 +122,11 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         noRecords: LABEL_NO_RECORDS,
         unexpectedError: LABEL_UNEXPECTED_ERROR,
         loadingWork: LABEL_LOADING_WORK,
-        assigned: LABEL_ASSIGNED
+        assigned: LABEL_ASSIGNED,
+        assignedHeader: LABEL_ASSIGNED_HEADER,
+        itemCount: LABEL_ITEM_COUNT
     };
 
-    // ─── Design attributes (set from App Builder) ───────────────────────
-    /**
-     * Developer name of a specific Routing_Config__mdt to lock the panel to.
-     * Set by the admin from App Builder via the targetConfig in meta.xml.
-     *
-     * - Provided  → Get Next Work routes only against this config and the
-     *               Queue widget shows the count of pending candidates for
-     *               this config alone.
-     * - Blank/null → Get Next Work routes across all active configs and the
-     *               Queue widget shows the SUM of pending candidates across
-     *               every active routing config (server-side fallback in
-     *               AgentWorkPanelController.getQueueDepth).
-     *
-     * Reactive: changing this value re-fires both the @wire(getQueueDepth)
-     * binding and any future config-aware @wires automatically.
-     */
     @api configDevName = null;
 
     // ─── Agent context state ────────────────────────────────────────────
@@ -148,16 +134,21 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     agentError = false;
     _wiredAgentResult;
 
-    // ─── Work assignment state ──────────────────────────────────────────
-    @track currentWork = null;
-    recordUrl = null;
+    // ─── Work list state ────────────────────────────────────────────────
+    /**
+     * Canonical list of active work items rendered in the panel.
+     * Keyed by recordId for O(1) updates in the SLA tick loop.
+     * Each entry shape matches the WorkAssignment Apex DTO plus the
+     * precomputed display fields (url, sla text, colour class, expired).
+     */
+    @track workItems = [];
+    _wiredAssignedResult;
     isRouting = false;
-    isDeferring = false;
+    /** Map<recordId, true> — which row is mid-defer (per-item spinner) */
+    @track deferringIds = {};
 
-    // ─── Assignment success banner: reactive object-label resolution ────
-    /** @type {string|null} Reactive SObject API name driving getObjectInfo */
+    // ─── Reactive object-label resolution for toast messages ─────────────
     @track assignedObjectApiName = null;
-    /** @type {string|null} Translated object label (e.g. "Case") */
     assignedObjectLabel = null;
 
     @wire(getObjectInfo, { objectApiName: '$assignedObjectApiName' })
@@ -167,29 +158,16 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         }
     }
 
-    /** @type {boolean} True when hosted in a Console app — enables openTab */
     @wire(IsConsoleNavigation) isConsoleNavigation;
 
     // ─── Queue depth ────────────────────────────────────────────────────
-    // Populated by the @wire(getQueueDepth) binding below — never set
-    // imperatively. Use refreshApex(this._wiredQueueResult) to force a
-    // re-fetch (e.g. after a routing assignment or defer mutation drains
-    // the queue, or on every auto-refresh tick to keep the number honest).
     @track queueCount = null;
     _wiredQueueResult;
 
-    // ─── SLA countdown ──────────────────────────────────────────────────
+    // ─── SLA countdown — single interval drives ALL items ───────────────
     _slaTimerId = null;
-    @track slaDisplay = '';
-    @track slaPercent = 100;
-    @track slaExpired = false;
-    _slaDeadlineMs = null;
-    _slaStartMs = null;
 
     // ─── Auto-refresh (client-side only) ────────────────────────────────
-    // Re-pulls agent context (currentLoad / maxCapacity / status) and
-    // queue depth on a fixed interval. No router calls — purely
-    // informational so the panel stays in sync with reaper / other agents.
     _autoRefreshTimerId = null;
     _visibilityHandler = null;
 
@@ -197,17 +175,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     // WIRED DATA
     // =========================================================================
 
-    /**
-     * Wired loader for the running user's Agent__c context (status, current
-     * load, max capacity, last assigned). cacheable=true on the Apex side, so
-     * Lightning Data Service caches the result across components and tabs.
-     *
-     * Refreshed by:
-     *   - refreshApex(this._wiredAgentResult) after a defer/route mutation
-     *   - The 10-second auto-refresh tick (which delegates to the
-     *     non-cacheable refreshAgentContext() so the WorkItemReaper can
-     *     also drop drift before returning the new context)
-     */
     @wire(getAgentContext)
     wiredAgent(result) {
         this._wiredAgentResult = result;
@@ -222,26 +189,23 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     }
 
     /**
-     * Wired Queue Depth for the panel's "Queue" metric. Reactive on
-     * $configDevName so the count refreshes the moment the admin re-binds
-     * the panel to a different routing config in App Builder.
-     *
-     * Behaviour driven by AgentWorkPanelController.getQueueDepth:
-     *   - configDevName provided → COUNT() of pending candidates for THAT
-     *     config only.
-     *   - configDevName blank    → SUM of COUNT() across every active
-     *     routing config (server-side fallback so the widget works on a
-     *     fresh install before the admin has chosen a config).
-     *
-     * cacheable=true on the Apex side → LDS cache shared across components
-     * (e.g. utility bar panel + record-page panel see the same number with
-     * a single SOQL hit). Manual refreshes via refreshApex(_wiredQueueResult)
-     * happen on:
-     *   - successful Get Next Work (queue drained by 1)
-     *   - successful Defer        (record returns to queue)
-     *   - the 10-second auto-refresh tick (catches drains/inserts caused
-     *     by other agents and inbound integration traffic)
+     * Hydrates the panel with every Active Agent_Work_Item__c for the running
+     * agent on mount (and on refreshApex after route/defer). Server-side bulk
+     * load includes per-item thresholds + SLA deadline, so the client never
+     * computes colour off hardcoded numbers.
      */
+    @wire(getAssignedWork)
+    wiredAssigned(result) {
+        this._wiredAssignedResult = result;
+        const { data, error } = result;
+        if (data) {
+            this.workItems = data.map((row) => this._hydrateItem(row));
+            this._ensureSlaTimer();
+        } else if (error) {
+            this.workItems = [];
+        }
+    }
+
     @wire(getQueueDepth, { configDevName: '$configDevName' })
     wiredQueue(result) {
         this._wiredQueueResult = result;
@@ -275,12 +239,11 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     }
 
     get hasWork() {
-        return this.currentWork != null;
+        return this.workItems && this.workItems.length > 0;
     }
 
-    get displayName() {
-        if (!this.currentWork) return '';
-        return this.currentWork.recordName || this.currentWork.recordId || '';
+    get itemCountLabel() {
+        return this.label.itemCount.replace('{0}', String(this.workItems.length));
     }
 
     get agentStatus() {
@@ -300,47 +263,14 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         return this.isRouting || !this.isAvailable;
     }
 
-    get deferButtonLabel() {
-        return this.isDeferring ? this.label.deferring : this.label.defer;
-    }
-
-    get isDeferDisabled() {
-        return this.isDeferring || !this.hasWork;
-    }
-
     get loadDisplay() {
         if (!this.agentContext) return '0 / 0';
         return `${this.agentContext.currentLoad || 0} / ${this.agentContext.maxCapacity || 0}`;
     }
 
-    /**
-     * Display value for the Queue metric in the panel header. Returns the
-     * raw count once the @wire(getQueueDepth) binding has resolved, or
-     * "--" while the wire is still in flight or has errored. The wire
-     * resolves with `null`/0 only on a clean empty result, so "--"
-     * specifically signals "not yet known", not "zero".
-     */
     get queueDisplay() {
         return this.queueCount != null ? this.queueCount : '--';
     }
-
-    get hasSla() {
-        return this._slaDeadlineMs != null;
-    }
-
-    get slaColorClass() {
-        if (this.slaExpired) return 'sla-red';
-        if (this.slaPercent <= 20) return 'sla-red';
-        if (this.slaPercent <= 50) return 'sla-amber';
-        return 'sla-green';
-    }
-
-    get slaText() {
-        if (this.slaExpired) return this.label.slaExpired;
-        return this.slaDisplay;
-    }
-
-    // ── Status button variants ──────────────────────────────────────────
 
     get statusOptions() {
         return [
@@ -360,9 +290,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     // EVENT HANDLERS
     // =========================================================================
 
-    /**
-     * @description Handles availability status change from the combobox.
-     */
     async handleStatusChange(event) {
         const newStatus = event.detail.value;
         if (newStatus === this.agentStatus) return;
@@ -382,12 +309,8 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         }
     }
 
-    /**
-     * @description "Next Best Action" -- pull next work item.
-     */
     async handleGetNextWork() {
         this.isRouting = true;
-        this.recordUrl = null;
 
         try {
             const result = await getNextWork({
@@ -395,27 +318,18 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
             });
 
             if (result.success) {
-                this.currentWork = result;
-                this._generateRecordUrl(result.recordId);
-                this._startSlaCountdown(result.slaDeadline);
-
-                // Trigger getObjectInfo to resolve the translated object label
                 this.assignedObjectApiName = result.objectApiName || null;
-
                 this._fireAssignmentSuccessBanner(result);
                 this._openAssignedRecord(result.recordId);
 
-                // Refresh agent context (load changed) and queue depth.
-                // refreshApex on both wires invalidates the LDS cache and
-                // re-fetches from the server so the metrics reflect the
-                // post-routing state immediately.
-                await refreshApex(this._wiredAgentResult);
-                if (this._wiredQueueResult) {
-                    refreshApex(this._wiredQueueResult);
-                }
+                // Server-side truth: re-fetch the assigned-work list so the
+                // new record is included with full SLA + threshold payload.
+                await Promise.all([
+                    refreshApex(this._wiredAgentResult),
+                    refreshApex(this._wiredAssignedResult),
+                    this._wiredQueueResult ? refreshApex(this._wiredQueueResult) : Promise.resolve()
+                ]);
             } else {
-                this.currentWork = null;
-                this._clearSlaTimer();
                 this.dispatchEvent(new ShowToastEvent({
                     title: this.label.routingError,
                     message: result.errorMessage || this.label.noRecords,
@@ -423,8 +337,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                 }));
             }
         } catch (error) {
-            this.currentWork = null;
-            this._clearSlaTimer();
             this.dispatchEvent(new ShowToastEvent({
                 title: this.label.routingError,
                 message: error.body?.message || this.label.unexpectedError,
@@ -436,22 +348,19 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     }
 
     /**
-     * @description Defer the currently assigned work item.
+     * Per-row defer. event.currentTarget.dataset carries { recordId, configDevName }.
      */
-    async handleDefer() {
-        if (!this.currentWork) return;
+    async handleDefer(event) {
+        const { recordId, configDevName } = event.currentTarget.dataset;
+        if (!recordId) return;
 
-        this.isDeferring = true;
+        this.deferringIds = { ...this.deferringIds, [recordId]: true };
 
         try {
             await deferWork({
-                recordId: this.currentWork.recordId,
-                configDevName: this.currentWork.configDevName || this.configDevName
+                recordId,
+                configDevName: configDevName || this.configDevName
             });
-
-            this.currentWork = null;
-            this.recordUrl = null;
-            this._clearSlaTimer();
 
             this.dispatchEvent(new ShowToastEvent({
                 title: this.label.deferSuccess,
@@ -459,13 +368,11 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                 variant: 'success'
             }));
 
-            // Refresh agent context (load changed) and queue depth.
-            // The deferred record returns to the candidate pool so the
-            // queue count should bump up by 1 on the re-fetch.
-            await refreshApex(this._wiredAgentResult);
-            if (this._wiredQueueResult) {
-                refreshApex(this._wiredQueueResult);
-            }
+            await Promise.all([
+                refreshApex(this._wiredAgentResult),
+                refreshApex(this._wiredAssignedResult),
+                this._wiredQueueResult ? refreshApex(this._wiredQueueResult) : Promise.resolve()
+            ]);
         } catch (error) {
             this.dispatchEvent(new ShowToastEvent({
                 title: this.label.deferError,
@@ -473,37 +380,158 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                 variant: 'error'
             }));
         } finally {
-            this.isDeferring = false;
+            const next = { ...this.deferringIds };
+            delete next[recordId];
+            this.deferringIds = next;
         }
     }
 
-    /**
-     * @description Navigate to the assigned record.
-     */
     handleNavigate(event) {
         event.preventDefault();
-        if (this.currentWork?.recordId) {
+        const recordId = event.currentTarget.dataset.recordId;
+        if (recordId) {
             this[NavigationMixin.Navigate]({
                 type: 'standard__recordPage',
-                attributes: {
-                    recordId: this.currentWork.recordId,
-                    actionName: 'view'
-                }
+                attributes: { recordId, actionName: 'view' }
             });
         }
     }
 
     // =========================================================================
-    // PRIVATE HELPERS
+    // PRIVATE HELPERS — WORK ITEM HYDRATION + SLA LOOP
     // =========================================================================
 
     /**
-     * @description Builds and dispatches the "Assignment Successful" sticky
-     *              banner. Fires in BOTH Console and Standard apps — the only
-     *              branch is which navigation API we use afterwards. Sticky
-     *              mode forces the agent to acknowledge, preventing missed
-     *              assignments during high-volume routing.
+     * Turns a raw WorkAssignment DTO into the shape the template renders.
+     * Precomputes:
+     *   - recordUrl (NavigationMixin.GenerateUrl resolves async → populated later)
+     *   - deadlineMs / assignedAtMs (numeric for tick math)
+     *   - warnPct / criticalPct (server-driven, safety-net fallback here)
+     *   - sla display fields (filled by _tickAllSla on the timer interval)
+     *   - deferring flag (reactive on deferringIds map)
      */
+    _hydrateItem(dto) {
+        const warn = Number.isFinite(dto.slaWarnPct) ? dto.slaWarnPct : FALLBACK_WARN_PCT;
+        const critical = Number.isFinite(dto.slaCriticalPct) ? dto.slaCriticalPct : FALLBACK_CRITICAL_PCT;
+        // Guard against broken config data — invariant: warn > critical.
+        const safeWarn = warn > critical ? warn : FALLBACK_WARN_PCT;
+        const safeCritical = warn > critical ? critical : FALLBACK_CRITICAL_PCT;
+
+        const deadlineMs = dto.slaDeadline ? new Date(dto.slaDeadline).getTime() : null;
+        const assignedAtMs = dto.assignedAt ? new Date(dto.assignedAt).getTime() : Date.now();
+
+        const item = {
+            recordId: dto.recordId,
+            recordName: dto.recordName || dto.recordId,
+            objectApiName: dto.objectApiName,
+            configDevName: dto.configDevName,
+            assignedAt: dto.assignedAt,
+            deadlineMs,
+            assignedAtMs,
+            warnPct: safeWarn,
+            criticalPct: safeCritical,
+            hasSla: deadlineMs != null,
+            slaDisplay: '',
+            slaPercent: 100,
+            slaExpired: false,
+            slaColorClass: 'sla-green',
+            recordUrl: null
+        };
+
+        // Resolve navigation URL async — once resolved, patch via workItems clone
+        this[NavigationMixin.GenerateUrl]({
+            type: 'standard__recordPage',
+            attributes: { recordId: dto.recordId, actionName: 'view' }
+        }).then((url) => {
+            this.workItems = this.workItems.map((w) =>
+                w.recordId === dto.recordId ? { ...w, recordUrl: url } : w
+            );
+        });
+
+        // Seed the SLA fields once so the first render is correct even
+        // before the first interval fires.
+        this._computeSla(item);
+        return item;
+    }
+
+    /** Ensures exactly one SLA interval runs whenever at least one item has an SLA. */
+    _ensureSlaTimer() {
+        const anySla = this.workItems.some((w) => w.hasSla);
+        if (!anySla) {
+            this._clearSlaTimer();
+            return;
+        }
+        if (this._slaTimerId) return;
+        this._tickAllSla();
+        this._slaTimerId = setInterval(() => this._tickAllSla(), 1000);
+    }
+
+    /** One pulse — updates sla fields on every item reactively. */
+    _tickAllSla() {
+        if (!this.workItems || this.workItems.length === 0) {
+            this._clearSlaTimer();
+            return;
+        }
+        this.workItems = this.workItems.map((item) => {
+            if (!item.hasSla) return item;
+            const next = { ...item };
+            this._computeSla(next);
+            return next;
+        });
+    }
+
+    /** Mutates `item` in place with fresh slaDisplay/slaPercent/slaColorClass. */
+    _computeSla(item) {
+        if (!item.hasSla) {
+            item.slaDisplay = '';
+            item.slaPercent = 100;
+            item.slaExpired = false;
+            item.slaColorClass = 'sla-green';
+            return;
+        }
+        const now = Date.now();
+        const remaining = item.deadlineMs - now;
+        const total = item.deadlineMs - item.assignedAtMs;
+
+        if (remaining <= 0) {
+            item.slaDisplay = '00:00:00';
+            item.slaPercent = 0;
+            item.slaExpired = true;
+            item.slaColorClass = 'sla-red';
+            return;
+        }
+
+        item.slaExpired = false;
+        item.slaPercent = total > 0 ? Math.round((remaining / total) * 100) : 100;
+
+        if (item.slaPercent <= item.criticalPct) {
+            item.slaColorClass = 'sla-red';
+        } else if (item.slaPercent <= item.warnPct) {
+            item.slaColorClass = 'sla-amber';
+        } else {
+            item.slaColorClass = 'sla-green';
+        }
+
+        const hours = Math.floor(remaining / 3600000);
+        const minutes = Math.floor((remaining % 3600000) / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        item.slaDisplay =
+            String(hours).padStart(2, '0') + ':' +
+            String(minutes).padStart(2, '0') + ':' +
+            String(seconds).padStart(2, '0');
+    }
+
+    _clearSlaTimer() {
+        if (this._slaTimerId) {
+            clearInterval(this._slaTimerId);
+            this._slaTimerId = null;
+        }
+    }
+
+    // =========================================================================
+    // PRIVATE HELPERS — BANNER + NAVIGATION
+    // =========================================================================
+
     _fireAssignmentSuccessBanner(result) {
         const objectDisplay = this.assignedObjectLabel
             || result.objectApiName
@@ -523,13 +551,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         }));
     }
 
-    /**
-     * @description Opens the assigned record for the agent. Runtime-aware:
-     *              in a Console app it opens a focused workspace subtab via
-     *              platformWorkspaceApi.openTab; in a Standard Lightning app
-     *              it navigates via NavigationMixin. Either path, the sticky
-     *              banner has already fired so the agent is always informed.
-     */
     async _openAssignedRecord(recordId) {
         if (!recordId) return;
         if (this.isConsoleNavigation) {
@@ -542,102 +563,15 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         }
         this[NavigationMixin.Navigate]({
             type: 'standard__recordPage',
-            attributes: {
-                recordId: recordId,
-                actionName: 'view'
-            }
+            attributes: { recordId, actionName: 'view' }
         });
     }
 
-    /**
-     * @description Generates a Lightning URL for the record link.
-     */
-    _generateRecordUrl(recordId) {
-        if (!recordId) return;
-        this[NavigationMixin.GenerateUrl]({
-            type: 'standard__recordPage',
-            attributes: {
-                recordId: recordId,
-                actionName: 'view'
-            }
-        }).then((url) => {
-            this.recordUrl = url;
-        });
-    }
+    // =========================================================================
+    // PRIVATE HELPERS — AUTO-REFRESH
+    // =========================================================================
 
-    /**
-     * @description Starts the SLA countdown timer. Runs every second,
-     *              zero server calls per tick. Stores the deadline and
-     *              start timestamps for percentage calculation.
-     */
-    _startSlaCountdown(slaDeadline) {
-        this._clearSlaTimer();
-
-        if (!slaDeadline) {
-            this._slaDeadlineMs = null;
-            this.slaDisplay = '';
-            this.slaPercent = 100;
-            this.slaExpired = false;
-            return;
-        }
-
-        this._slaDeadlineMs = new Date(slaDeadline).getTime();
-        this._slaStartMs = Date.now();
-
-        this._tickSla();
-        this._slaTimerId = setInterval(() => this._tickSla(), 1000);
-    }
-
-    /**
-     * @description Single tick of the SLA countdown. Calculates remaining
-     *              time, formats display string, computes percentage for
-     *              colour thresholds.
-     */
-    _tickSla() {
-        const now = Date.now();
-        const remaining = this._slaDeadlineMs - now;
-        const total = this._slaDeadlineMs - this._slaStartMs;
-
-        if (remaining <= 0) {
-            this.slaDisplay = '00:00:00';
-            this.slaPercent = 0;
-            this.slaExpired = true;
-            this._clearSlaTimer();
-            return;
-        }
-
-        this.slaExpired = false;
-        this.slaPercent = total > 0 ? Math.round((remaining / total) * 100) : 100;
-
-        const hours = Math.floor(remaining / 3600000);
-        const minutes = Math.floor((remaining % 3600000) / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-
-        this.slaDisplay =
-            String(hours).padStart(2, '0') + ':' +
-            String(minutes).padStart(2, '0') + ':' +
-            String(seconds).padStart(2, '0');
-    }
-
-    /**
-     * @description Clears the SLA interval timer.
-     */
-    _clearSlaTimer() {
-        if (this._slaTimerId) {
-            clearInterval(this._slaTimerId);
-            this._slaTimerId = null;
-        }
-    }
-
-    /**
-     * @description Starts the client-side auto-refresh loop. Re-pulls
-     *              agent context and queue depth every AUTO_REFRESH_MS.
-     *              Pauses while the tab is hidden (Page Visibility API)
-     *              to avoid wasted server traffic when the agent is
-     *              looking elsewhere.
-     */
     _startAutoRefresh() {
-        // Defensive: never double-start
         this._stopAutoRefresh();
 
         this._autoRefreshTimerId = setInterval(
@@ -645,7 +579,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
             AUTO_REFRESH_MS
         );
 
-        // Pause/resume on tab visibility change
         if (typeof document !== 'undefined' && document.addEventListener) {
             this._visibilityHandler = () => {
                 if (document.hidden) {
@@ -654,8 +587,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                         this._autoRefreshTimerId = null;
                     }
                 } else if (!this._autoRefreshTimerId) {
-                    // Immediate refresh on resume so the agent sees fresh
-                    // numbers the moment they return to the tab
                     this._tickAutoRefresh();
                     this._autoRefreshTimerId = setInterval(
                         () => this._tickAutoRefresh(),
@@ -667,10 +598,6 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
         }
     }
 
-    /**
-     * @description Stops the auto-refresh loop and removes the
-     *              visibility listener. Idempotent.
-     */
     _stopAutoRefresh() {
         if (this._autoRefreshTimerId) {
             clearInterval(this._autoRefreshTimerId);
@@ -683,37 +610,12 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
     }
 
     /**
-     * One pulse of the 10-second auto-refresh loop. Keeps the panel's
-     * Current Load + Queue widgets honest without forcing the agent to
-     * reload the page. Skips work when:
-     *
-     *   - No agent context has loaded yet (first wire still in flight).
-     *   - A user-initiated route/defer is mid-flight (don't clobber the
-     *     optimistic UI mid-mutation — the mutation handler runs its own
-     *     refreshApex on completion).
-     *
-     * Two server interactions per tick:
-     *
-     *   1. refreshAgentContext (non-cacheable, AuraEnabled): runs the
-     *      WorkItemReaper for the running user server-side, completes any
-     *      Agent_Work_Item__c rows whose source record was closed/deleted
-     *      since the last tick, then returns the freshly-loaded
-     *      AgentContext. This is what makes the Current Load gauge drop
-     *      the moment the agent closes an assigned Case/Opp. The
-     *      response replaces this.agentContext directly — no refreshApex
-     *      needed because the payload shape matches the wired result.
-     *
-     *   2. refreshApex(_wiredQueueResult): re-runs getQueueDepth via the
-     *      LDS cache layer so the Queue metric reflects new candidates
-     *      arriving from inbound integrations or other agents pulling
-     *      work from the same pool.
-     *
-     * All errors are swallowed silently — this is a background refresh,
-     * not a user action, and a transient failure must not toast the
-     * agent or break the cadence.
+     * 10-second pulse — reaps zombie work items server-side, then refreshes
+     * every wired dataset. Silent on failure. Skips while a user-initiated
+     * route is in flight (mid-mutation noise).
      */
     _tickAutoRefresh() {
-        if (!this._wiredAgentResult || this.isRouting || this.isDeferring) {
+        if (!this._wiredAgentResult || this.isRouting) {
             return;
         }
         refreshAgentContext()
@@ -722,13 +624,12 @@ export default class UreAgentWorkPanel extends NavigationMixin(LightningElement)
                     this.agentContext = ctx;
                 }
             })
-            .catch(() => {
-                // Silent — informational refresh, do not toast
-            });
+            .catch(() => { /* silent */ });
+        if (this._wiredAssignedResult) {
+            refreshApex(this._wiredAssignedResult).catch(() => { /* silent */ });
+        }
         if (this._wiredQueueResult) {
-            refreshApex(this._wiredQueueResult).catch(() => {
-                // Silent — informational refresh, do not toast
-            });
+            refreshApex(this._wiredQueueResult).catch(() => { /* silent */ });
         }
     }
 }
