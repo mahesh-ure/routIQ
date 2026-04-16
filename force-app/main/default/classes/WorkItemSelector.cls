@@ -49,7 +49,7 @@ public with sharing class WorkItemSelector {
         return [
             SELECT Id, Record_Id__c, Object_API_Name__c,
                    Config_Developer_Name__c, Assigned_At__c, Status__c,
-                   Agent__c
+                   Agent__c, Agent__r.User__c
             FROM   Agent_Work_Item__c
             WHERE  Agent__c = :agentId
             AND    Status__c = :STATUS_ACTIVE

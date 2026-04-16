@@ -38,6 +38,22 @@
     </labels>
 
     <labels>
+        <fullName>URE_AssignmentSuccessTitle</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Success banner title when a record is assigned to the agent</shortDescription>
+        <value>Assignment Successful</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_AssignmentSuccessMessage</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Success banner body. {0}=object label, {1}=record name.</shortDescription>
+        <value>{0} {1} has been successfully assigned to you.</value>
+    </labels>
+
+    <labels>
         <fullName>URE_RoutingError</fullName>
         <language>en_US</language>
         <protected>true</protected>
@@ -299,6 +315,22 @@
         <protected>true</protected>
         <shortDescription>Empty state body text</shortDescription>
         <value>Click Next Best Action to pull your next work item.</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelAssignedHeader</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Section heading above the list of active work items</shortDescription>
+        <value>Your Assigned Work</value>
+    </labels>
+
+    <labels>
+        <fullName>URE_WorkPanelItemCount</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Item count shown next to the assigned-work header. Token {0} = count</shortDescription>
+        <value>{0} item(s)</value>
     </labels>
 
     <labels>

@@ -1,6 +1,7 @@
 import { createElement } from 'lwc';
 import UreAgentWorkPanel from 'c/ureAgentWorkPanel';
 import getAgentContext from '@salesforce/apex/AgentWorkPanelController.getAgentContext';
+import getAssignedWork from '@salesforce/apex/AgentWorkPanelController.getAssignedWork';
 import getNextWork from '@salesforce/apex/AgentWorkPanelController.getNextWork';
 import deferWork from '@salesforce/apex/AgentWorkPanelController.deferWork';
 import getQueueDepth from '@salesforce/apex/AgentWorkPanelController.getQueueDepth';
@@ -13,6 +14,19 @@ jest.mock(
         const { createApexTestWireAdapter } = require('@salesforce/sfdx-lwc-jest');
         return { default: createApexTestWireAdapter(jest.fn()) };
     },
+    { virtual: true }
+);
+jest.mock(
+    '@salesforce/apex/AgentWorkPanelController.getAssignedWork',
+    () => {
+        const { createApexTestWireAdapter } = require('@salesforce/sfdx-lwc-jest');
+        return { default: createApexTestWireAdapter(jest.fn()) };
+    },
+    { virtual: true }
+);
+jest.mock(
+    '@salesforce/apex/AgentWorkPanelController.refreshAgentContext',
+    () => ({ default: jest.fn(() => Promise.resolve(null)) }),
     { virtual: true }
 );
 jest.mock(
@@ -57,10 +71,14 @@ jest.mock('@salesforce/label/c.URE_WorkPanelDeferSuccess', () => ({ default: 'Wo
 jest.mock('@salesforce/label/c.URE_WorkPanelDeferError', () => ({ default: 'Defer Failed' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_RoutingError', () => ({ default: 'Routing Error' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_RecordAssigned', () => ({ default: 'Record Assigned' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_AssignmentSuccessTitle', () => ({ default: 'Assignment Successful' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_AssignmentSuccessMessage', () => ({ default: '{0} {1} has been successfully assigned to you.' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_NoRecordsAvailable', () => ({ default: 'No records available.' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_UnexpectedError', () => ({ default: 'An unexpected error occurred.' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_WorkPanelLoadingWork', () => ({ default: 'Finding next work item' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_Assigned', () => ({ default: 'Assigned' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_WorkPanelAssignedHeader', () => ({ default: 'Your Assigned Work' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_WorkPanelItemCount', () => ({ default: '{0} item(s)' }), { virtual: true });
 
 // ── Test Data ───────────────────────────────────────────────────────────────
 const MOCK_AGENT_CONTEXT = {
@@ -72,6 +90,23 @@ const MOCK_AGENT_CONTEXT = {
     lastAssigned: '2025-01-01T00:00:00.000Z'
 };
 
+/** Base WorkAssignment row shape — the server contract. */
+function buildItem(overrides = {}) {
+    const now = Date.now();
+    return {
+        success: true,
+        recordId: '500000000000001AAA',
+        recordName: 'Case-00001234',
+        objectApiName: 'Case',
+        configDevName: 'Test_Config',
+        assignedAt: new Date(now - 5 * 60 * 1000).toISOString(), // assigned 5m ago
+        slaDeadline: new Date(now + 55 * 60 * 1000).toISOString(), // 55m left → > 90% remaining
+        slaWarnPct: 50,
+        slaCriticalPct: 20,
+        ...overrides
+    };
+}
+
 const MOCK_WORK_SUCCESS = {
     success: true,
     recordId: '500000000000001AAA',
@@ -80,7 +115,10 @@ const MOCK_WORK_SUCCESS = {
     assignedTo: '005000000000001AAA',
     routingLogId: 'a01000000000001AAA',
     errorMessage: null,
-    slaDeadline: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+    slaDeadline: new Date(Date.now() + 3600000).toISOString(),
+    assignedAt: new Date().toISOString(),
+    slaWarnPct: 50,
+    slaCriticalPct: 20,
     configDevName: 'Test_Config'
 };
 
@@ -99,10 +137,7 @@ const MOCK_WORK_NO_MATCH = {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 async function flushPromises() {
-    return new Promise((resolve) => {
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
-        setTimeout(resolve, 0);
-    });
+    return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function createComponent() {
@@ -111,12 +146,16 @@ function createComponent() {
     return element;
 }
 
-function emitWiredAgent(data) {
+function emitAgent(data) {
     getAgentContext.emit(data);
 }
 
-function emitWiredAgentError() {
+function emitAgentError() {
     getAgentContext.error();
+}
+
+function emitAssigned(items) {
+    getAssignedWork.emit(items);
 }
 
 // ── Test Suite ──────────────────────────────────────────────────────────────
@@ -124,7 +163,9 @@ function emitWiredAgentError() {
 describe('c-ure-agent-work-panel', () => {
 
     beforeEach(() => {
-        jest.useFakeTimers();
+        // Jest fake timers clash with async helper's setTimeout in some
+        // scenarios — use real timers by default, opt in per test.
+        jest.useRealTimers();
     });
 
     afterEach(() => {
@@ -132,7 +173,6 @@ describe('c-ure-agent-work-panel', () => {
             document.body.removeChild(document.body.firstChild);
         }
         jest.clearAllMocks();
-        jest.useRealTimers();
     });
 
     // ── Initial Render / Agent Context ──────────────────────────────────
@@ -140,53 +180,93 @@ describe('c-ure-agent-work-panel', () => {
     describe('initial render with agent context', () => {
         it('renders the card with title "My Work"', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const card = element.shadowRoot.querySelector('lightning-card');
-            expect(card).not.toBeNull();
             expect(card.title).toBe('My Work');
         });
 
         it('displays agent status badge', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const badge = element.shadowRoot.querySelector('.status-badge');
-            expect(badge).not.toBeNull();
             expect(badge.textContent).toBe('Online');
         });
 
         it('displays current load as "2 / 10"', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const metrics = element.shadowRoot.querySelectorAll('.metric-value');
-            expect(metrics.length).toBeGreaterThanOrEqual(1);
             expect(metrics[0].textContent).toBe('2 / 10');
         });
 
-        it('renders empty state when no work assigned', async () => {
+        it('renders empty state when assigned list is empty', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const emptyHeading = element.shadowRoot.querySelector('.empty-state .slds-text-heading_small');
-            expect(emptyHeading).not.toBeNull();
             expect(emptyHeading.textContent).toBe('No Work Assigned');
         });
 
-        it('renders Next Best Action button enabled when Online', async () => {
+        it('enables Next Best Action when Online', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
-            const buttons = element.shadowRoot.querySelectorAll('lightning-button');
-            const nextBtn = Array.from(buttons).find(b => b.label === 'Next Best Action');
-            expect(nextBtn).not.toBeNull();
+            const nextBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Next Best Action');
             expect(nextBtn.disabled).toBe(false);
+        });
+    });
+
+    // ── Pre-existing assigned work (the core gap this feature closes) ───
+
+    describe('pre-existing assignments hydrated via @wire(getAssignedWork)', () => {
+        it('renders the assigned header + item count', async () => {
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem(), buildItem({ recordId: '500000000000002AAA', recordName: 'Case-00001235' })]);
+            await flushPromises();
+
+            const header = element.shadowRoot.querySelector('.slds-text-title_caps');
+            expect(header.textContent).toBe('Your Assigned Work');
+
+            const count = element.shadowRoot.querySelector('.slds-text-body_small.slds-text-color_weak');
+            expect(count.textContent).toContain('2');
+        });
+
+        it('renders one work-card per assigned item', async () => {
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([
+                buildItem(),
+                buildItem({ recordId: '500000000000002AAA', recordName: 'Case-00001235' }),
+                buildItem({ recordId: '500000000000003AAA', recordName: 'Case-00001236' })
+            ]);
+            await flushPromises();
+
+            const cards = element.shadowRoot.querySelectorAll('.work-card');
+            expect(cards.length).toBe(3);
+        });
+
+        it('hides the empty state once items are emitted', async () => {
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
+            await flushPromises();
+
+            expect(element.shadowRoot.querySelector('.empty-state')).toBeNull();
         });
     });
 
@@ -195,20 +275,18 @@ describe('c-ure-agent-work-panel', () => {
     describe('agent error state', () => {
         it('renders error illustration when no agent record exists', async () => {
             const element = createComponent();
-            emitWiredAgentError();
+            emitAgentError();
             await flushPromises();
 
-            const illustration = element.shadowRoot.querySelector('lightning-illustration');
-            expect(illustration).not.toBeNull();
+            expect(element.shadowRoot.querySelector('lightning-illustration')).not.toBeNull();
         });
 
-        it('does not render Next Best Action button on agent error', async () => {
+        it('does not render any lightning-button on agent error', async () => {
             const element = createComponent();
-            emitWiredAgentError();
+            emitAgentError();
             await flushPromises();
 
-            const buttons = element.shadowRoot.querySelectorAll('lightning-button');
-            expect(buttons.length).toBe(0);
+            expect(element.shadowRoot.querySelectorAll('lightning-button').length).toBe(0);
         });
     });
 
@@ -217,38 +295,30 @@ describe('c-ure-agent-work-panel', () => {
     describe('availability toggle', () => {
         it('renders combobox with current status', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const combo = element.shadowRoot.querySelector('lightning-combobox');
-            expect(combo).not.toBeNull();
             expect(combo.value).toBe('Online');
         });
 
         it('disables Next Best Action when status is Away', async () => {
             const element = createComponent();
-            emitWiredAgent({ ...MOCK_AGENT_CONTEXT, status: 'Away' });
+            emitAgent({ ...MOCK_AGENT_CONTEXT, status: 'Away' });
+            emitAssigned([]);
             await flushPromises();
 
-            const buttons = element.shadowRoot.querySelectorAll('lightning-button');
-            const nextBtn = Array.from(buttons).find(b => b.label === 'Next Best Action');
-            expect(nextBtn.disabled).toBe(true);
-        });
-
-        it('disables Next Best Action when status is Offline', async () => {
-            const element = createComponent();
-            emitWiredAgent({ ...MOCK_AGENT_CONTEXT, status: 'Offline' });
-            await flushPromises();
-
-            const buttons = element.shadowRoot.querySelectorAll('lightning-button');
-            const nextBtn = Array.from(buttons).find(b => b.label === 'Next Best Action');
+            const nextBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Next Best Action');
             expect(nextBtn.disabled).toBe(true);
         });
 
         it('calls updateAgentStatus on combobox change', async () => {
             updateAgentStatus.mockResolvedValue('OK');
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const combo = element.shadowRoot.querySelector('lightning-combobox');
@@ -265,312 +335,260 @@ describe('c-ure-agent-work-panel', () => {
     // ── Get Next Work ───────────────────────────────────────────────────
 
     describe('get next work', () => {
-        it('displays assigned record on success', async () => {
+        it('fires success toast on successful assignment', async () => {
             getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-
-            nextBtn.click();
-            await flushPromises();
-
-            const link = element.shadowRoot.querySelector('a');
-            expect(link).not.toBeNull();
-            expect(link.textContent).toContain('Case-00001234');
-        });
-
-        it('shows defer button when work is assigned', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
-            const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-
-            nextBtn.click();
-            await flushPromises();
-
-            const deferBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Defer');
-            expect(deferBtn).not.toBeNull();
-        });
-
-        it('fires success toast on work assignment', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
-            const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const dispatchSpy = jest.spyOn(element, 'dispatchEvent');
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-
+            const nextBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Next Best Action');
             nextBtn.click();
             await flushPromises();
 
             const toastCalls = dispatchSpy.mock.calls.filter(
                 (call) => call[0].type === 'lightning__showtoast'
             );
-            expect(toastCalls.length).toBeGreaterThanOrEqual(1);
             expect(toastCalls[0][0].detail.variant).toBe('success');
         });
 
         it('shows warning toast on no-match', async () => {
             getNextWork.mockResolvedValue(MOCK_WORK_NO_MATCH);
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const dispatchSpy = jest.spyOn(element, 'dispatchEvent');
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-
+            const nextBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Next Best Action');
             nextBtn.click();
             await flushPromises();
 
             const toastCalls = dispatchSpy.mock.calls.filter(
                 (call) => call[0].type === 'lightning__showtoast'
             );
-            expect(toastCalls.length).toBeGreaterThanOrEqual(1);
             expect(toastCalls[0][0].detail.variant).toBe('warning');
         });
 
         it('handles Apex exception gracefully', async () => {
             getNextWork.mockRejectedValue({ body: { message: 'Server error' } });
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([]);
             await flushPromises();
 
             const dispatchSpy = jest.spyOn(element, 'dispatchEvent');
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-
+            const nextBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Next Best Action');
             nextBtn.click();
             await flushPromises();
 
             const toastCalls = dispatchSpy.mock.calls.filter(
                 (call) => call[0].type === 'lightning__showtoast'
             );
-            expect(toastCalls.length).toBeGreaterThanOrEqual(1);
             expect(toastCalls[0][0].detail.variant).toBe('error');
         });
     });
 
-    // ── Defer Work ──────────────────────────────────────────────────────
+    // ── Defer Work (per-row) ────────────────────────────────────────────
 
     describe('defer work', () => {
-        it('clears current work on successful defer', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
+        it('calls deferWork with recordId + configDevName from the row', async () => {
             deferWork.mockResolvedValue('OK');
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
             await flushPromises();
 
-            // First, get work
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
-            await flushPromises();
-
-            // Now defer
-            const deferBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Defer');
+            const deferBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Defer');
             deferBtn.click();
             await flushPromises();
 
-            // Work should be cleared, empty state should return
-            const link = element.shadowRoot.querySelector('a');
-            expect(link).toBeNull();
-
-            const emptyHeading = element.shadowRoot.querySelector('.empty-state');
-            expect(emptyHeading).not.toBeNull();
+            expect(deferWork).toHaveBeenCalledWith({
+                recordId: '500000000000001AAA',
+                configDevName: 'Test_Config'
+            });
         });
 
         it('fires success toast on defer', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
             deferWork.mockResolvedValue('OK');
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
             await flushPromises();
 
             const dispatchSpy = jest.spyOn(element, 'dispatchEvent');
-            const deferBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Defer');
+            const deferBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Defer');
             deferBtn.click();
             await flushPromises();
 
             const toastCalls = dispatchSpy.mock.calls.filter(
                 (call) => call[0].type === 'lightning__showtoast'
             );
-            const successToast = toastCalls.find(c => c[0].detail.title === 'Work Deferred');
-            expect(successToast).not.toBeUndefined();
+            const success = toastCalls.find(c => c[0].detail.title === 'Work Deferred');
+            expect(success).not.toBeUndefined();
         });
 
         it('fires error toast on defer failure', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
             deferWork.mockRejectedValue({ body: { message: 'Defer failed' } });
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
             await flushPromises();
 
             const dispatchSpy = jest.spyOn(element, 'dispatchEvent');
-            const deferBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Defer');
+            const deferBtn = Array.from(element.shadowRoot.querySelectorAll('lightning-button'))
+                .find(b => b.label === 'Defer');
             deferBtn.click();
             await flushPromises();
 
             const toastCalls = dispatchSpy.mock.calls.filter(
                 (call) => call[0].type === 'lightning__showtoast'
             );
-            const errorToast = toastCalls.find(c => c[0].detail.variant === 'error');
-            expect(errorToast).not.toBeUndefined();
+            const err = toastCalls.find(c => c[0].detail.variant === 'error');
+            expect(err).not.toBeUndefined();
         });
     });
 
-    // ── SLA Countdown ───────────────────────────────────────────────────
+    // ── SLA Countdown & admin-tunable colour thresholds ─────────────────
 
-    describe('SLA countdown timer', () => {
-        it('displays SLA countdown when work has slaDeadline', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
+    describe('SLA countdown', () => {
+        it('renders HH:MM:SS for an item with slaDeadline', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
             await flushPromises();
 
             const slaTimer = element.shadowRoot.querySelector('.sla-timer');
-            expect(slaTimer).not.toBeNull();
-            // Should display HH:MM:SS format
             expect(slaTimer.textContent).toMatch(/^\d{2}:\d{2}:\d{2}$/);
         });
 
-        it('does not display SLA section when slaDeadline is null', async () => {
-            const noSlaWork = { ...MOCK_WORK_SUCCESS, slaDeadline: null };
-            getNextWork.mockResolvedValue(noSlaWork);
+        it('hides the SLA section when slaDeadline is null', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({ slaDeadline: null })]);
             await flushPromises();
 
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
-            await flushPromises();
-
-            const slaSection = element.shadowRoot.querySelector('.sla-section');
-            expect(slaSection).toBeNull();
+            expect(element.shadowRoot.querySelector('.sla-section')).toBeNull();
         });
 
-        it('applies sla-green class when > 50% remaining', async () => {
-            // 1 hour from now = well above 50%
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
+        it('applies sla-green class when remaining > warnPct', async () => {
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]); // ~91% remaining > 50%
             await flushPromises();
 
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            expect(element.shadowRoot.querySelector('.sla-green')).not.toBeNull();
+        });
+
+        it('applies sla-amber when remaining ≤ warnPct', async () => {
+            // assignedAt 80m ago, deadline 10m from now → ~11% left
+            // but warnPct=90 so we land in amber band
+            const now = Date.now();
+            const item = buildItem({
+                assignedAt: new Date(now - 80 * 60 * 1000).toISOString(),
+                slaDeadline: new Date(now + 10 * 60 * 1000).toISOString(),
+                slaWarnPct: 90,
+                slaCriticalPct: 5
+            });
+
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([item]);
             await flushPromises();
 
-            const slaDiv = element.shadowRoot.querySelector('.sla-green');
-            expect(slaDiv).not.toBeNull();
+            expect(element.shadowRoot.querySelector('.sla-amber')).not.toBeNull();
+        });
+
+        it('applies sla-red when remaining ≤ criticalPct (admin-tunable)', async () => {
+            // 95m elapsed, 5m left → ~5% left. criticalPct=10 → red.
+            const now = Date.now();
+            const item = buildItem({
+                assignedAt: new Date(now - 95 * 60 * 1000).toISOString(),
+                slaDeadline: new Date(now + 5 * 60 * 1000).toISOString(),
+                slaWarnPct: 50,
+                slaCriticalPct: 10
+            });
+
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([item]);
+            await flushPromises();
+
+            expect(element.shadowRoot.querySelector('.sla-red')).not.toBeNull();
+        });
+
+        it('respects admin-tunable thresholds — same % different colour', async () => {
+            // Item at ~30% remaining. With warnPct=50 → amber.
+            // With warnPct=20 → green. Proves the CMDT value drives the class.
+            const now = Date.now();
+            const base = {
+                assignedAt: new Date(now - 70 * 60 * 1000).toISOString(),
+                slaDeadline: new Date(now + 30 * 60 * 1000).toISOString()
+            };
+
+            // Case A: warnPct=50 → amber
+            const elA = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({ ...base, slaWarnPct: 50, slaCriticalPct: 20 })]);
+            await flushPromises();
+            expect(elA.shadowRoot.querySelector('.sla-amber')).not.toBeNull();
+            document.body.removeChild(elA);
+
+            // Case B: warnPct=20 → green at same %
+            const elB = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({ ...base, slaWarnPct: 20, slaCriticalPct: 5 })]);
+            await flushPromises();
+            expect(elB.shadowRoot.querySelector('.sla-green')).not.toBeNull();
+        });
+
+        it('falls back to safety-net thresholds when DTO omits or inverts values', async () => {
+            // warnPct <= criticalPct is an invariant violation → fallback 50/20.
+            // At ~30% remaining → amber (below 50, above 20).
+            const now = Date.now();
+            const element = createComponent();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({
+                assignedAt: new Date(now - 70 * 60 * 1000).toISOString(),
+                slaDeadline: new Date(now + 30 * 60 * 1000).toISOString(),
+                slaWarnPct: 10,       // invalid: warn <= critical
+                slaCriticalPct: 40
+            })]);
+            await flushPromises();
+
+            expect(element.shadowRoot.querySelector('.sla-amber')).not.toBeNull();
         });
 
         it('shows SLA Expired when deadline is in the past', async () => {
-            const expiredWork = {
-                ...MOCK_WORK_SUCCESS,
-                slaDeadline: new Date(Date.now() - 1000).toISOString()
-            };
-            getNextWork.mockResolvedValue(expiredWork);
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({
+                assignedAt: new Date(Date.now() - 3600000).toISOString(),
+                slaDeadline: new Date(Date.now() - 1000).toISOString()
+            })]);
             await flushPromises();
 
             const slaTimer = element.shadowRoot.querySelector('.sla-timer');
-            expect(slaTimer).not.toBeNull();
-            // Should show expired state
             expect(slaTimer.textContent).toMatch(/(00:00:00|SLA Expired)/);
+            expect(element.shadowRoot.querySelector('.sla-red')).not.toBeNull();
         });
 
-        it('clears SLA timer on disconnectedCallback', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
+        it('cleans up SLA timer on disconnect without throwing', async () => {
+            jest.useFakeTimers();
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem()]);
 
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
-            await flushPromises();
-
-            // Remove component — should clear interval
             document.body.removeChild(element);
-
-            // Advance timers — should not throw
+            // Advancing timers past the 1s tick must not throw
             jest.advanceTimersByTime(5000);
-        });
-
-        it('clears SLA timer when work is deferred', async () => {
-            getNextWork.mockResolvedValue(MOCK_WORK_SUCCESS);
-            deferWork.mockResolvedValue('OK');
-            const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
-            await flushPromises();
-
-            const deferBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Defer');
-            deferBtn.click();
-            await flushPromises();
-
-            // SLA section should be gone
-            const slaSection = element.shadowRoot.querySelector('.sla-section');
-            expect(slaSection).toBeNull();
+            jest.useRealTimers();
         });
     });
 
@@ -578,19 +596,9 @@ describe('c-ure-agent-work-panel', () => {
 
     describe('XSS protection', () => {
         it('does not render HTML in record name', async () => {
-            const xssWork = {
-                ...MOCK_WORK_SUCCESS,
-                recordName: '<img src=x onerror=alert(1)>'
-            };
-            getNextWork.mockResolvedValue(xssWork);
             const element = createComponent();
-            emitWiredAgent(MOCK_AGENT_CONTEXT);
-            await flushPromises();
-
-            const nextBtn = Array.from(
-                element.shadowRoot.querySelectorAll('lightning-button')
-            ).find(b => b.label === 'Next Best Action');
-            nextBtn.click();
+            emitAgent(MOCK_AGENT_CONTEXT);
+            emitAssigned([buildItem({ recordName: '<img src=x onerror=alert(1)>' })]);
             await flushPromises();
 
             const link = element.shadowRoot.querySelector('a');

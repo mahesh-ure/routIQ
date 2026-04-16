@@ -30,8 +30,19 @@ public with sharing class AgentWorkPanelController {
         @AuraEnabled public Id routingLogId;
         @AuraEnabled public String errorMessage;
         @AuraEnabled public Datetime slaDeadline;
+        @AuraEnabled public Datetime assignedAt;
+        @AuraEnabled public Integer slaWarnPct;
+        @AuraEnabled public Integer slaCriticalPct;
         @AuraEnabled public String configDevName;
     }
+
+    // Subscriber-overridable fallbacks for SLA colour thresholds. These are a
+    // safety net, NOT defaults — Routing_Config__mdt.SLA_Warn_Threshold_Pct__c
+    // / SLA_Critical_Threshold_Pct__c are the source of truth. Fallbacks only
+    // apply when the CMDT record omits the value (fresh install / partial
+    // config). Keep Warn > Critical invariant enforced at read.
+    private static final Integer FALLBACK_SLA_WARN_PCT = 50;
+    private static final Integer FALLBACK_SLA_CRITICAL_PCT = 20;
 
     /**
      * @description Returns AgentContext for the running user. Cacheable -- no DML.
@@ -102,6 +113,89 @@ public with sharing class AgentWorkPanelController {
     }
 
     // =========================================================================
+    // 1b. getAssignedWork -- hydrate the panel with PRE-EXISTING active work
+    //     items for the running agent. Called on component init so the panel
+    //     never shows "No Work Assigned" when the ledger already has rows
+    //     (prior session, inbound integration, admin reassignment, reaper).
+    // =========================================================================
+
+    /**
+     * @description Returns the running agent's active work items enriched with
+     *              record display names, SLA deadlines, and per-config SLA colour
+     *              thresholds. Bulk SLA + name loads are grouped by object so N
+     *              work items cost at most N distinct-object SOQL queries.
+     *
+     *              Source of truth: Agent_Work_Item__c.Status__c = 'Active' —
+     *              routIQ's internal ledger. This matches Current_Load__c
+     *              (sync'd by WorkItemService + WorkItemReaper), so the panel
+     *              never disagrees with the load counter.
+     *
+     *              SLA deadline resolution (per row):
+     *                1. If Routing_Config__mdt.SLA_Deadline_Field__c is set and
+     *                   the record has a non-null value, use that.
+     *                2. Else if Routing_Config__mdt.SLA_Minutes__c is set,
+     *                   fall back to Assigned_At__c + SLA_Minutes.
+     *                3. Else null (countdown hidden for that row).
+     *
+     *              Cost: 1 SOQL (work items) + 1 SOQL per distinct object in
+     *              the ledger. Typical agent carries 1–3 objects → 2–4 SOQL.
+     *
+     * @return List of WorkAssignment DTOs (may be empty). Never null.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<WorkAssignment> getAssignedWork() {
+        AgentContext ctx = loadAgentContext();
+
+        List<Agent_Work_Item__c> items =
+            AssignmentSelector.getActiveWorkItemsForAgent(ctx.agentId);
+
+        if (items == null || items.isEmpty()) {
+            return new List<WorkAssignment>();
+        }
+
+        Map<String, Routing_Config__mdt> configs = RoutingConfigSelector.getAllConfigs();
+
+        // Bucket Ids by object for bulk SOQL (one query per distinct object).
+        Map<String, Set<Id>> idsByObject = new Map<String, Set<Id>>();
+        Map<String, Set<String>> slaFieldsByObject = new Map<String, Set<String>>();
+
+        for (Agent_Work_Item__c wi : items) {
+            if (String.isBlank(wi.Object_API_Name__c) || String.isBlank(wi.Record_Id__c)) {
+                continue;
+            }
+            Id recId;
+            try {
+                recId = (Id) wi.Record_Id__c;
+            } catch (System.StringException ex) {
+                continue; // malformed ledger row — skip, don't fail the panel
+            }
+            String obj = wi.Object_API_Name__c;
+
+            if (!idsByObject.containsKey(obj)) {
+                idsByObject.put(obj, new Set<Id>());
+                slaFieldsByObject.put(obj, new Set<String>());
+            }
+            idsByObject.get(obj).add(recId);
+
+            Routing_Config__mdt cfg = configs.get(wi.Config_Developer_Name__c);
+            if (cfg != null && String.isNotBlank(cfg.SLA_Deadline_Field__c)) {
+                slaFieldsByObject.get(obj).add(cfg.SLA_Deadline_Field__c);
+            }
+        }
+
+        Map<Id, SObject> recordMap = bulkLoadRecords(idsByObject, slaFieldsByObject);
+
+        List<WorkAssignment> dtos = new List<WorkAssignment>();
+        for (Agent_Work_Item__c wi : items) {
+            WorkAssignment wa = buildAssignmentDto(wi, configs, recordMap);
+            if (wa != null) {
+                dtos.add(wa);
+            }
+        }
+        return dtos;
+    }
+
+    // =========================================================================
     // 2. getNextWork -- route and return enriched assignment with SLA deadline
     // =========================================================================
 
@@ -150,12 +244,210 @@ public with sharing class AgentWorkPanelController {
         wa.errorMessage  = result.errorMessage;
         wa.configDevName = configDevName;
 
-        // Enrich with SLA deadline if routing succeeded
+        // Enrich with SLA deadline + colour thresholds if routing succeeded.
+        // Thresholds always hydrate so the LWC never falls back to hardcoded
+        // numbers for the just-pulled record.
         if (result.success && result.recordId != null) {
-            wa.slaDeadline = loadSlaDeadline(result.recordId, result.objectApiName, configDevName);
+            Routing_Config__mdt cfg = String.isNotBlank(configDevName)
+                ? RoutingConfigSelector.getAllConfigs().get(configDevName)
+                : null;
+
+            wa.assignedAt     = Datetime.now();
+            wa.slaDeadline    = loadSlaDeadline(result.recordId, result.objectApiName, cfg, wa.assignedAt);
+            wa.slaWarnPct     = resolveThreshold(cfg, true);
+            wa.slaCriticalPct = resolveThreshold(cfg, false);
         }
 
         return wa;
+    }
+
+    // =========================================================================
+    // Shared helpers — bulk record load, DTO build, threshold resolution
+    // =========================================================================
+
+    /**
+     * @description Bulk-loads Name + SLA fields for every (object → Ids) pair in
+     *              the work-item ledger. One SOQL per distinct object. Silently
+     *              skips objects that are no longer in the schema (package
+     *              dependency dropped) — the row just loses its name/SLA, not
+     *              the whole panel.
+     */
+    private static Map<Id, SObject> bulkLoadRecords(
+        Map<String, Set<Id>> idsByObject,
+        Map<String, Set<String>> slaFieldsByObject
+    ) {
+        Map<Id, SObject> result = new Map<Id, SObject>();
+        if (idsByObject == null || idsByObject.isEmpty()) {
+            return result;
+        }
+
+        for (String obj : idsByObject.keySet()) {
+            Set<Id> ids = idsByObject.get(obj);
+            if (ids == null || ids.isEmpty()) {
+                continue;
+            }
+            try {
+                Schema.SObjectType sot = Schema.getGlobalDescribe().get(obj);
+                if (sot == null) {
+                    continue;
+                }
+                Map<String, Schema.SObjectField> fieldMap = sot.getDescribe().fields.getMap();
+
+                // Build a safe, deduped field list: Id + name field + any SLA fields
+                Set<String> fieldsToSelect = new Set<String>{ 'Id' };
+                String nameField = null;
+                for (Schema.SObjectField f : fieldMap.values()) {
+                    if (f.getDescribe().isNameField()) {
+                        nameField = f.getDescribe().getName();
+                        break;
+                    }
+                }
+                if (String.isNotBlank(nameField)) {
+                    fieldsToSelect.add(nameField);
+                }
+                Set<String> slaFields = slaFieldsByObject.get(obj);
+                if (slaFields != null) {
+                    for (String sf : slaFields) {
+                        if (fieldMap.containsKey(sf.toLowerCase())) {
+                            fieldsToSelect.add(sf);
+                        }
+                    }
+                }
+
+                String soql = 'SELECT ' + String.join(new List<String>(fieldsToSelect), ', ')
+                    + ' FROM ' + obj
+                    + ' WHERE Id IN :recIds';
+
+                Map<String, Object> binds = new Map<String, Object>{ 'recIds' => ids };
+
+                for (SObject rec : Database.queryWithBinds(soql, binds, AccessLevel.USER_MODE)) {
+                    result.put((Id) rec.get('Id'), rec);
+                }
+            } catch (Exception ex) {
+                // Non-fatal — orphan/locked objects must not kill the panel
+                Logger.warn('bulkLoadRecords skipped ' + obj + ' | ' + ex.getMessage())
+                    .category(Logger.Category.ENGINE)
+                    .inClass(CLS).inMethod('bulkLoadRecords')
+                    .log();
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @description Turns one Agent_Work_Item__c row into a WorkAssignment DTO
+     *              using the pre-loaded config + record maps. Returns null if
+     *              the record has vanished from the schema (row will be filtered).
+     */
+    private static WorkAssignment buildAssignmentDto(
+        Agent_Work_Item__c wi,
+        Map<String, Routing_Config__mdt> configs,
+        Map<Id, SObject> recordMap
+    ) {
+        Id recId;
+        try {
+            recId = (Id) wi.Record_Id__c;
+        } catch (Exception ex) {
+            return null;
+        }
+
+        Routing_Config__mdt cfg = configs.get(wi.Config_Developer_Name__c);
+        SObject rec = recordMap.get(recId);
+
+        WorkAssignment wa = new WorkAssignment();
+        wa.success        = true;
+        wa.recordId       = recId;
+        wa.objectApiName  = wi.Object_API_Name__c;
+        wa.configDevName  = wi.Config_Developer_Name__c;
+        wa.assignedTo     = UserInfo.getUserId();
+        wa.assignedAt     = wi.Assigned_At__c;
+        wa.slaWarnPct     = resolveThreshold(cfg, true);
+        wa.slaCriticalPct = resolveThreshold(cfg, false);
+
+        // Record display name — fall back to Id if the record is gone
+        if (rec != null) {
+            String nameField = resolveNameField(wi.Object_API_Name__c);
+            if (String.isNotBlank(nameField)) {
+                Object nameVal = rec.get(nameField);
+                wa.recordName = (nameVal != null) ? String.valueOf(nameVal) : null;
+            }
+        }
+
+        // SLA deadline: prefer the field value, fall back to assignedAt + SLA_Minutes.
+        Datetime deadline = null;
+        if (cfg != null && String.isNotBlank(cfg.SLA_Deadline_Field__c) && rec != null) {
+            Object val = null;
+            try {
+                val = rec.get(cfg.SLA_Deadline_Field__c);
+            } catch (Exception ex) {
+                val = null;
+            }
+            if (val instanceof Datetime) {
+                deadline = (Datetime) val;
+            }
+        }
+        if (deadline == null && cfg != null && cfg.SLA_Minutes__c != null
+            && cfg.SLA_Minutes__c > 0 && wi.Assigned_At__c != null
+        ) {
+            deadline = wi.Assigned_At__c.addMinutes(cfg.SLA_Minutes__c.intValue());
+        }
+        wa.slaDeadline = deadline;
+
+        return wa;
+    }
+
+    /**
+     * @description Resolves the isNameField() for an object (Name, CaseNumber, …).
+     *              Returns null if the object is not in the schema.
+     */
+    private static String resolveNameField(String objectApiName) {
+        if (String.isBlank(objectApiName)) return null;
+        Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
+        if (sot == null) return null;
+        for (Schema.SObjectField f : sot.getDescribe().fields.getMap().values()) {
+            if (f.getDescribe().isNameField()) {
+                return f.getDescribe().getName();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @description Resolves the SLA colour threshold for a config, clamping to
+     *              a valid range and enforcing the Warn > Critical invariant.
+     *              Uses FALLBACK_* safety nets when CMDT is null.
+     *
+     * @param cfg    The routing config (nullable — returns fallback on null)
+     * @param isWarn true → warn (amber) threshold; false → critical (red) threshold
+     */
+    private static Integer resolveThreshold(Routing_Config__mdt cfg, Boolean isWarn) {
+        Integer warn = FALLBACK_SLA_WARN_PCT;
+        Integer crit = FALLBACK_SLA_CRITICAL_PCT;
+
+        if (cfg != null) {
+            if (cfg.SLA_Warn_Threshold_Pct__c != null) {
+                warn = cfg.SLA_Warn_Threshold_Pct__c.intValue();
+            }
+            if (cfg.SLA_Critical_Threshold_Pct__c != null) {
+                crit = cfg.SLA_Critical_Threshold_Pct__c.intValue();
+            }
+        }
+
+        // Clamp to [0, 100]
+        if (warn < 0) warn = 0;
+        if (warn > 100) warn = 100;
+        if (crit < 0) crit = 0;
+        if (crit > 100) crit = 100;
+
+        // Enforce invariant: Warn must be strictly greater than Critical.
+        // On violation, fall back to safety-net values rather than silently
+        // drawing everything red.
+        if (warn <= crit) {
+            warn = FALLBACK_SLA_WARN_PCT;
+            crit = FALLBACK_SLA_CRITICAL_PCT;
+        }
+
+        return isWarn ? warn : crit;
     }
 
     // =========================================================================
@@ -337,51 +629,50 @@ public with sharing class AgentWorkPanelController {
         return Database.countQueryWithBinds(soql, bindMap, AccessLevel.USER_MODE);
     }
 
-    /** @description Loads SLA deadline from the assigned record. Returns null if not configured. */
+    /**
+     * @description Single-record SLA deadline resolver for the just-pulled
+     *              assignment. Preferred order:
+     *                1. SLA_Deadline_Field__c value on the record
+     *                2. assignedAt + SLA_Minutes__c
+     *                3. null (countdown hidden)
+     *              Bulk equivalent lives in buildAssignmentDto for getAssignedWork.
+     */
     private static Datetime loadSlaDeadline(
         Id recordId,
         String objectApiName,
-        String configDevName
+        Routing_Config__mdt config,
+        Datetime assignedAt
     ) {
-        // Determine SLA field from config
-        String slaField = null;
-        if (String.isNotBlank(configDevName)) {
-            Map<String, Routing_Config__mdt> allConfigs = RoutingConfigSelector.getAllConfigs();
-            Routing_Config__mdt config = allConfigs.get(configDevName);
-            if (config != null) {
-                slaField = config.SLA_Deadline_Field__c;
+        // Path 1: field-backed deadline
+        String slaField = (config != null) ? config.SLA_Deadline_Field__c : null;
+
+        if (String.isNotBlank(slaField) && String.isNotBlank(objectApiName)) {
+            Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
+            if (sot != null && sot.getDescribe().fields.getMap().get(slaField) != null) {
+                String soql = 'SELECT ' + slaField + ' FROM ' + objectApiName
+                             + ' WHERE Id = :recordId LIMIT 1';
+                List<SObject> records = Database.queryWithBinds(
+                    soql,
+                    new Map<String, Object>{ 'recordId' => recordId },
+                    AccessLevel.USER_MODE
+                );
+                if (!records.isEmpty()) {
+                    Object val = records[0].get(slaField);
+                    if (val instanceof Datetime) {
+                        return (Datetime) val;
+                    }
+                }
             }
         }
 
-        if (String.isBlank(slaField)) {
-            return null;
+        // Path 2: minutes-based fallback
+        if (config != null && config.SLA_Minutes__c != null
+            && config.SLA_Minutes__c > 0 && assignedAt != null
+        ) {
+            return assignedAt.addMinutes(config.SLA_Minutes__c.intValue());
         }
 
-        // Validate field exists on object
-        Schema.SObjectType sot = Schema.getGlobalDescribe().get(objectApiName);
-        if (sot == null) {
-            return null;
-        }
-        if (sot.getDescribe().fields.getMap().get(slaField) == null) {
-            return null;
-        }
-
-        // Query the SLA value -- bind variable for record Id
-        String soql = 'SELECT ' + slaField + ' FROM ' + objectApiName
-                     + ' WHERE Id = :recordId LIMIT 1';
-        Map<String, Object> bindMap = new Map<String, Object>();
-        bindMap.put('recordId', recordId);
-
-        List<SObject> records = Database.queryWithBinds(
-            soql, bindMap, AccessLevel.USER_MODE
-        );
-
-        if (records.isEmpty()) {
-            return null;
-        }
-
-        Object val = records[0].get(slaField);
-        return (val instanceof Datetime) ? (Datetime) val : null;
+        return null;
     }
 
     // decrementAgentLoad() removed — replaced by WorkItemService.deferWorkItem()

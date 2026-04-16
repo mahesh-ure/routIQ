@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>SLA_Critical_Threshold_Pct__c</fullName>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <description>SLA remaining percentage at or below which the Agent Work Panel displays the countdown in red (critical). Must be less than SLA_Warn_Threshold_Pct__c. When null, the panel falls back to 20. Subscriber-tunable — admins can relax or tighten the critical band per routing scenario without code changes.</description>
+    <inlineHelpText>Remaining % at which the SLA countdown turns red. Must be &lt; Warn % and &gt;= 0. Defaults to 20 if blank.</inlineHelpText>
+    <label>SLA Critical Threshold %</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

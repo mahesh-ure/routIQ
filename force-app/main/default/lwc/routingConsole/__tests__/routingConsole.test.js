@@ -14,6 +14,8 @@ jest.mock('@salesforce/label/c.URE_NextBestAction', () => ({ default: 'Next Best
 jest.mock('@salesforce/label/c.URE_Routing', () => ({ default: 'Routing...' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_Assigned', () => ({ default: 'Assigned' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_RecordAssigned', () => ({ default: 'Record Assigned' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_AssignmentSuccessTitle', () => ({ default: 'Assignment Successful' }), { virtual: true });
+jest.mock('@salesforce/label/c.URE_AssignmentSuccessMessage', () => ({ default: '{0} {1} has been successfully assigned to you.' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_RoutingError', () => ({ default: 'Routing Error' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_NoRecordsAvailable', () => ({ default: 'No records available.' }), { virtual: true });
 jest.mock('@salesforce/label/c.URE_UnexpectedError', () => ({ default: 'An unexpected error occurred.' }), { virtual: true });
@@ -186,9 +188,11 @@ describe('c-routing-console', () => {
                 (call) => call[0].type === 'lightning__showtoast'
             );
             expect(toastCalls).toHaveLength(1);
-            expect(toastCalls[0][0].detail.title).toBe('Record Assigned');
-            expect(toastCalls[0][0].detail.message).toBe('Case-00001234');
+            expect(toastCalls[0][0].detail.title).toBe('Assignment Successful');
+            // getObjectInfo wire does not resolve in Jest without emit — falls back to API name
+            expect(toastCalls[0][0].detail.message).toBe('Case Case-00001234 has been successfully assigned to you.');
             expect(toastCalls[0][0].detail.variant).toBe('success');
+            expect(toastCalls[0][0].detail.mode).toBe('sticky');
         });
 
         it('falls back to recordId when recordName is null', async () => {
