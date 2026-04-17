@@ -1,0 +1,215 @@
+<template>
+    <div class="slds-form slds-form_stacked slds-p-around_medium">
+
+        <!-- ═══ Title ════════════════════════════════════════════════ -->
+        <div class="slds-m-bottom_large">
+            <h2 class="slds-text-heading_large">Routing Simulator</h2>
+            <p class="slds-text-body_regular slds-text-color_weak">
+                Test any routing configuration against a sample record. No changes will be made.
+            </p>
+        </div>
+
+        <!-- ─── Error Loading Configs ───────────────────────────────────────── -->
+        <template lwc:if={hasConfigError}>
+            <div class="slds-notify slds-notify_alert slds-alert_error slds-m-bottom_medium" role="alert">
+                <span class="slds-assistive-text">Error</span>
+                <p>{configsError}</p>
+            </div>
+        </template>
+
+        <!-- ───────────────────────────────────────────────────────────────── -->
+        <!-- Simulator Inputs Section                                         -->
+        <!-- ───────────────────────────────────────────────────────────────── -->
+
+        <div class="slds-box slds-box_small slds-m-bottom_medium">
+            <div class="slds-form_stacked">
+
+                <!-- Config Selector -->
+                <div class="slds-form-element slds-m-bottom_medium">
+                    <label class="slds-form-element__label" for="config-select">
+                        <abbr class="slds-required" title="required">*</abbr> {label.configSelect}
+                    </label>
+                    <div class="slds-form-element__control">
+                        <template lwc:if={configsLoading}>
+                            <lightning-spinner size="small"></lightning-spinner>
+                        </template>
+                        <template lwc:else>
+                            <lightning-combobox
+                                id="config-select"
+                                name="config"
+                                label=" "
+                                label-hidden="true"
+                                options={configOptions}
+                                value={selectedConfigDevName}
+                                placeholder="Select a configuration..."
+                                onchange={handleConfigChange}
+                                disabled={configsLoading}>
+                            </lightning-combobox>
+                            <template lwc:if={noConfigs}>
+                                <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                    No active configurations found. Create a configuration in the Setup Wizard.
+                                </p>
+                            </template>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Record ID Input -->
+                <div class="slds-form-element">
+                    <lightning-input
+                        label={label.recordId}
+                        value={recordId}
+                        placeholder="e.g. 500xx0000001234"
+                        field-level-help={label.recordHelp}
+                        onchange={handleRecordIdChange}
+                        disabled={isSimulating}>
+                    </lightning-input>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Simulate Button -->
+        <div class="slds-m-bottom_large">
+            <lightning-button
+                label={label.simulate}
+                variant="brand"
+                icon-name="utility:preview"
+                onclick={handleSimulate}
+                disabled={isSimulateDisabled}
+                class="slds-m-right_small">
+            </lightning-button>
+        </div>
+
+        <!-- ─── Simulating Spinner ────────────────────────────────────────── -->
+        <template lwc:if={isSimulating}>
+            <div class="slds-align_absolute-center slds-m-vertical_large">
+                <lightning-spinner
+                    alternative-text={label.simulating}
+                    size="medium">
+                </lightning-spinner>
+            </div>
+        </template>
+
+        <!-- ───────────────────────────────────────────────────────────────── -->
+        <!-- Simulation Results Section                                        -->
+        <!-- ───────────────────────────────────────────────────────────────── -->
+
+        <!-- Simulate Error -->
+        <template lwc:if={hasSimulateError}>
+            <div class="slds-notify slds-notify_alert slds-alert_error slds-m-bottom_medium" role="alert">
+                <span class="slds-assistive-text">Error</span>
+                <p>{simulateError}</p>
+            </div>
+        </template>
+
+        <!-- Simulate Result -->
+        <template lwc:if={hasSimulateResult}>
+            <div class="slds-section slds-is-open slds-m-bottom_medium">
+                <h3 class="slds-section__title slds-theme_shade">
+                    <span class="slds-truncate slds-p-horizontal_small">{label.simResult}</span>
+                </h3>
+                <div class="slds-section__content">
+
+                    <!-- Result Header with Icon -->
+                    <div class="slds-box slds-box_x-small slds-m-bottom_medium">
+                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_medium">
+                            <lightning-icon
+                                icon-name={resultIcon}
+                                variant={resultVariant}
+                                size="small"
+                                class="slds-m-right_small">
+                            </lightning-icon>
+                            <div>
+                                <p class="slds-text-heading_small" class:slds-text-color_success={simulateSuccess} class:slds-text-color_error={simulateFailed}>
+                                    {resultTitle}
+                                </p>
+                                <template lwc:if={simulateFailed}>
+                                    <p class="slds-text-body_small slds-m-top_x-small">{resultErrorMessage}</p>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Reason Summary -->
+                        <template lwc:if={reasonSummary}>
+                            <p class="slds-text-body_regular slds-m-bottom_medium">
+                                <strong>Routing Decision:</strong>
+                            </p>
+                            <p class="slds-text-body_regular slds-m-bottom_medium">{reasonSummary}</p>
+                        </template>
+                    </div>
+
+                    <!-- Condition Traces Table -->
+                    <template lwc:if={hasTraces}>
+                        <p class="slds-text-title_caps slds-m-bottom_medium slds-text-color_weak">
+                            {label.traces}
+                        </p>
+                        <div class="slds-scrollable_x">
+                            <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_striped">
+                                <thead>
+                                    <tr class="slds-line-height_reset">
+                                        <th scope="col" class="slds-text-heading_x-small">
+                                            <span class="slds-truncate">Field</span>
+                                        </th>
+                                        <th scope="col" class="slds-text-heading_x-small">
+                                            <span class="slds-truncate">Operator</span>
+                                        </th>
+                                        <th scope="col" class="slds-text-heading_x-small">
+                                            <span class="slds-truncate">Expected</span>
+                                        </th>
+                                        <th scope="col" class="slds-text-heading_x-small">
+                                            <span class="slds-truncate">Actual</span>
+                                        </th>
+                                        <th scope="col" class="slds-text-heading_x-small">
+                                            <span class="slds-truncate">Result</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={conditionTraces} for:item="trace">
+                                        <tr key={trace.fieldApiName} class="slds-hint-parent">
+                                            <td class="slds-text-body_small">{trace.fieldApiName}</td>
+                                            <td class="slds-text-body_small">{trace.operator}</td>
+                                            <td class="slds-text-body_small">
+                                                <span class="slds-truncate" title={trace.expectedValue}>{trace.expectedValue}</span>
+                                            </td>
+                                            <td class="slds-text-body_small">
+                                                <span class="slds-truncate" title={trace.actualValue}>{trace.actualValue}</span>
+                                            </td>
+                                            <td class="slds-text-body_small slds-text-align_center">
+                                                <template lwc:if={trace.passed}>
+                                                    <lightning-icon
+                                                        icon-name="utility:success"
+                                                        variant="success"
+                                                        size="x-small"
+                                                        title="Condition passed">
+                                                    </lightning-icon>
+                                                </template>
+                                                <template lwc:else>
+                                                    <lightning-icon
+                                                        icon-name="utility:close"
+                                                        variant="error"
+                                                        size="x-small"
+                                                        title="Condition failed">
+                                                    </lightning-icon>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+
+                    <template lwc:if={noTraces}>
+                        <p class="slds-text-body_regular slds-text-color_weak">
+                            No condition details available.
+                        </p>
+                    </template>
+
+                </div>
+            </div>
+        </template>
+
+    </div>
+</template>
